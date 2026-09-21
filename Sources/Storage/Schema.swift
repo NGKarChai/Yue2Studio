@@ -66,6 +66,14 @@ public struct Schema {
 
         // Populate initial default presets if empty
         try seedInitialDatabaseRecords(database: database)
+        try ensureYuE2RegistryEntries(database: database)
+        try purgeLegacyModelRegistryEntries(database: database)
+    }
+
+    private static func purgeLegacyModelRegistryEntries(database: SQLiteDatabase) throws {
+        try database.execute(sql: """
+            DELETE FROM model_registry WHERE id IN ('stage1-7b-en', 'stage1-7b-zh', 'stage2-1b', 'xcodec');
+        """)
     }
 
     private static func seedInitialDatabaseRecords(database: SQLiteDatabase) throws {
@@ -108,40 +116,18 @@ public struct Schema {
                 let initialLyrics: [(String, String, String)] = [
                     (
                         "l1",
-                        "Echoes of Tomorrow",
+                        "Morning Light",
                         """
                         [verse]
-                        Waking up under morning light
-                        Chasing shadows into the night
-                        Every step brings a brand new sound
-                        Feet are dancing off the ground
+                        Sunlight creeping through the blind
+                        Leaving yesterday behind
+                        Step into another day
+                        Finding words I want to say
 
                         [chorus]
                         Hear the music rising high
                         Painting colors in the sky
                         We are singing through the rain
-                        Nothing holding back the flame
-
-                        [outro]
-                        Fading light, we take flight
-                        """
-                    ),
-                    (
-                        "l2",
-                        "Midnight Highway",
-                        """
-                        [intro]
-                        Neon signs flashing in the dark
-
-                        [verse]
-                        Headlights cutting through the mist
-                        Chasing moments that we missed
-                        Radio static humming low
-                        Only one direction left to go
-
-                        [chorus]
-                        Ride the highway till the dawn
-                        Before the midnight hour is gone
                         """
                     )
                 ]
@@ -162,10 +148,8 @@ public struct Schema {
                 defer { insertModel.reset() }
 
                 let initialModels: [(String, String, String, String, String, String, Int64, String)] = [
-                    ("stage1-7b-en", "stage1", "YuE Stage 1 (7B English CoT)", "m-a-p/YuE-s1-7B-anneal-en-cot", "Models/stage1", "not_downloaded", 4200000000, ""),
-                    ("stage1-7b-zh", "stage1", "YuE Stage 1 (7B Chinese CoT)", "m-a-p/YuE-s1-7B-anneal-zh-cot", "Models/stage1-zh", "not_downloaded", 4200000000, ""),
-                    ("stage2-1b", "stage2", "YuE Stage 2 (1B Refiner)", "m-a-p/YuE-s2-1B-general", "Models/stage2", "not_downloaded", 1100000000, ""),
-                    ("xcodec", "xcodec", "X-Codec Neural Decoder", "m-a-p/xcodec_mini_infer", "Models/xcodec", "not_downloaded", 280000000, "")
+                    ("yue2-3b", "yue2", "YuE2-3B Flow Matching Generator", "vanch007/mlx-Yue2-3B", "Models/yue2-3b", "not_downloaded", 2800000000, ""),
+                    ("yue2-vae", "yue2_vae", "YuE2 48kHz Oobleck VAE Decoder", "m-a-p/YuE2-Vae", "Models/yue2-vae", "not_downloaded", 600000000, "")
                 ]
 
                 for item in initialModels {
@@ -181,6 +165,32 @@ public struct Schema {
                     insertModel.step()
                 }
             }
+        }
+    }
+
+    private static func ensureYuE2RegistryEntries(database: SQLiteDatabase) throws {
+        let insertModel = try database.prepare(sql: """
+            INSERT OR IGNORE INTO model_registry (id, stage, name, repo_id, local_path, status, size_bytes, sha256)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """)
+        defer { insertModel.reset() }
+
+        let yue2Models: [(String, String, String, String, String, String, Int64, String)] = [
+            ("yue2-3b", "yue2", "YuE2-3B Flow Matching Generator", "vanch007/mlx-Yue2-3B", "Models/yue2-3b", "not_downloaded", 2800000000, ""),
+            ("yue2-vae", "yue2_vae", "YuE2 48kHz Oobleck VAE Decoder", "m-a-p/YuE2-Vae", "Models/yue2-vae", "not_downloaded", 600000000, "")
+        ]
+
+        for item in yue2Models {
+            insertModel.reset()
+            try insertModel.bind(index: 1, value: item.0)
+            try insertModel.bind(index: 2, value: item.1)
+            try insertModel.bind(index: 3, value: item.2)
+            try insertModel.bind(index: 4, value: item.3)
+            try insertModel.bind(index: 5, value: item.4)
+            try insertModel.bind(index: 6, value: item.5)
+            try insertModel.bind(index: 7, value: item.6)
+            try insertModel.bind(index: 8, value: item.7)
+            insertModel.step()
         }
     }
 }

@@ -23,6 +23,11 @@ public final class SettingsRepository: Sendable {
         case masteringTargetRMS = "mastering_target_rms"
         case masteringCeilingDB = "mastering_ceiling_db"
         case playerMonitoringVolume = "player_monitoring_volume"
+        case engineType = "engine_type"
+        case yue2ModelDirectory = "yue2_model_directory"
+        case yue2VAEDirectory = "yue2_vae_directory"
+        case yue2FlowSteps = "yue2_flow_steps"
+        case yue2CfgScale = "yue2_cfg_scale"
     }
 
     public init(database: SQLiteDatabase) {
@@ -49,7 +54,12 @@ public final class SettingsRepository: Sendable {
             .levelingEnabled: "true",
             .masteringTargetRMS: "0.18",
             .masteringCeilingDB: "-1.0",
-            .playerMonitoringVolume: "1.0"
+            .playerMonitoringVolume: "1.0",
+            .engineType: "yue1",
+            .yue2ModelDirectory: "Models/yue2-3b",
+            .yue2VAEDirectory: "Models/yue2-vae",
+            .yue2FlowSteps: "32",
+            .yue2CfgScale: "1.0"
         ]
 
         for (key, defaultValue) in defaults {

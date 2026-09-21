@@ -46,7 +46,7 @@ public final class MIDIExporter: @unchecked Sendable {
         // Delta-time 0: Track Name
         track.append(contentsOf: encodeVLQ(0))
         track.append(contentsOf: [0xFF, 0x03]) // Meta: Track Name
-        let nameBytes = Array(score.title.utf8)
+        let nameBytes = Array((score.title.isEmpty ? "YuE2 Score" : score.title).utf8)
         track.append(contentsOf: encodeVLQ(nameBytes.count))
         track.append(contentsOf: nameBytes)
 
@@ -62,12 +62,11 @@ public final class MIDIExporter: @unchecked Sendable {
         // Delta-time 0: Time Signature
         track.append(contentsOf: encodeVLQ(0))
         track.append(contentsOf: [0xFF, 0x58, 0x04])
-        track.append(UInt8(score.meter.beats))
-        // Denominator as power of 2: e.g. 4 -> 2 (2^2 = 4)
-        let denomPower = UInt8(round(log2(Double(score.meter.beatType))))
+        track.append(UInt8(max(1, score.meter.beats)))
+        let denomPower = UInt8(round(log2(Double(max(1, score.meter.beatType)))))
         track.append(denomPower)
         track.append(24) // 24 MIDI clocks per metronome click
-        track.append(8)  // 8 32nd-notes per MIDI quarter note (24 clocks)
+        track.append(8)  // 8 32nd-notes per MIDI quarter note
 
         // End of Track
         track.append(contentsOf: encodeVLQ(0))
@@ -79,12 +78,28 @@ public final class MIDIExporter: @unchecked Sendable {
     private func createMelodyTrack(score: ABCScore) -> Data {
         var track = Data()
 
-        // Delta-time 0: Track Name "Lead Melody"
+        // Delta-time 0: Track Name "Lead Vocal / Melody"
         track.append(contentsOf: encodeVLQ(0))
         track.append(contentsOf: [0xFF, 0x03])
         let trackName = Array("Lead Vocal / Melody".utf8)
         track.append(contentsOf: encodeVLQ(trackName.count))
         track.append(contentsOf: trackName)
+
+        // Delta-time 0: GM Instrument Program Change on Channel 0 (0xC0: 0x00 Acoustic Grand Piano)
+        track.append(contentsOf: encodeVLQ(0))
+        track.append(contentsOf: [0xC0, 0x00])
+
+        // Delta-time 0: CC 7 Channel Volume (127 Max)
+        track.append(contentsOf: encodeVLQ(0))
+        track.append(contentsOf: [0xB0, 0x07, 0x7F])
+
+        // Delta-time 0: CC 10 Pan (64 Center)
+        track.append(contentsOf: encodeVLQ(0))
+        track.append(contentsOf: [0xB0, 0x0A, 0x40])
+
+        // Delta-time 0: CC 91 Reverb Send (40)
+        track.append(contentsOf: encodeVLQ(0))
+        track.append(contentsOf: [0xB0, 0x5B, 0x28])
 
         var accumulatedDeltaTicks: Int = 0
 
@@ -94,7 +109,7 @@ public final class MIDIExporter: @unchecked Sendable {
 
                 if let pitch = note.pitch {
                     let midiNote = UInt8(max(0, min(127, pitch.midiNoteNumber)))
-                    let velocity: UInt8 = 96
+                    let velocity: UInt8 = 100
 
                     // Note On (Channel 0)
                     track.append(contentsOf: encodeVLQ(accumulatedDeltaTicks))
@@ -106,7 +121,7 @@ public final class MIDIExporter: @unchecked Sendable {
 
                     accumulatedDeltaTicks = 0
                 } else {
-                    // Rest: add ticks to accumulated delta for next note
+                    // Rest: accumulate ticks for next note event
                     accumulatedDeltaTicks += noteDurationTicks
                 }
             }
@@ -129,33 +144,62 @@ public final class MIDIExporter: @unchecked Sendable {
         track.append(contentsOf: encodeVLQ(trackName.count))
         track.append(contentsOf: trackName)
 
+        // Delta-time 0: GM Instrument Program Change on Channel 1 (0xC1: 0x00 Acoustic Grand Piano)
+        track.append(contentsOf: encodeVLQ(0))
+        track.append(contentsOf: [0xC1, 0x00])
+
+        // Delta-time 0: CC 7 Channel Volume (96)
+        track.append(contentsOf: encodeVLQ(0))
+        track.append(contentsOf: [0xB1, 0x07, 0x60])
+
+        // Delta-time 0: CC 10 Pan (64 Center)
+        track.append(contentsOf: encodeVLQ(0))
+        track.append(contentsOf: [0xB1, 0x0A, 0x40])
+
         var accumulatedDeltaTicks: Int = 0
 
         for measure in score.measures {
-            for note in measure.notes {
-                let noteDurationTicks = max(1, Int(note.durationBeats * Double(ticksPerQuarterNote)))
+            // Check if measure has any chords
+            let chordNotes = measure.notes.enumerated().filter { $0.element.chord != nil }
 
-                if let chordName = note.chord, let midiPitches = chordToMidi(chordName) {
-                    let velocity: UInt8 = 75
+            if chordNotes.isEmpty {
+                // If no chords in this measure, advance accumulated delta by measure duration
+                let measureTicks = measure.notes.reduce(0) { $0 + max(1, Int($1.durationBeats * Double(ticksPerQuarterNote))) }
+                accumulatedDeltaTicks += (measureTicks > 0 ? measureTicks : ticksPerQuarterNote * 4)
+                continue
+            }
 
-                    // Play chord notes simultaneously on Channel 1 (0x91)
-                    for (i, p) in midiPitches.enumerated() {
-                        let delta = (i == 0) ? accumulatedDeltaTicks : 0
-                        track.append(contentsOf: encodeVLQ(delta))
-                        track.append(contentsOf: [0x91, UInt8(p), velocity])
-                    }
-
-                    // Release chord notes simultaneously
-                    for (i, p) in midiPitches.enumerated() {
-                        let delta = (i == 0) ? noteDurationTicks : 0
-                        track.append(contentsOf: encodeVLQ(delta))
-                        track.append(contentsOf: [0x81, UInt8(p), 0x00])
-                    }
-
-                    accumulatedDeltaTicks = 0
-                } else {
-                    accumulatedDeltaTicks += noteDurationTicks
+            // Calculate duration for each chord in the measure so chords sustain properly
+            for (idx, (noteIdx, note)) in chordNotes.enumerated() {
+                guard let chordName = note.chord, let midiPitches = chordToMidi(chordName) else {
+                    continue
                 }
+
+                // Determine duration of this chord: until next chord note or end of measure
+                let nextNoteIdx = (idx + 1 < chordNotes.count) ? chordNotes[idx + 1].offset : measure.notes.count
+                var chordDurationTicks = 0
+                for nI in noteIdx..<nextNoteIdx {
+                    chordDurationTicks += max(1, Int(measure.notes[nI].durationBeats * Double(ticksPerQuarterNote)))
+                }
+                chordDurationTicks = max(ticksPerQuarterNote / 2, chordDurationTicks)
+
+                let velocity: UInt8 = 75
+
+                // Play chord notes simultaneously on Channel 1 (0x91)
+                for (i, p) in midiPitches.enumerated() {
+                    let delta = (i == 0) ? accumulatedDeltaTicks : 0
+                    track.append(contentsOf: encodeVLQ(delta))
+                    track.append(contentsOf: [0x91, UInt8(max(0, min(127, p))), velocity])
+                }
+
+                // Release chord notes simultaneously
+                for (i, p) in midiPitches.enumerated() {
+                    let delta = (i == 0) ? chordDurationTicks : 0
+                    track.append(contentsOf: encodeVLQ(delta))
+                    track.append(contentsOf: [0x81, UInt8(max(0, min(127, p))), 0x00])
+                }
+
+                accumulatedDeltaTicks = 0
             }
         }
 
@@ -168,8 +212,8 @@ public final class MIDIExporter: @unchecked Sendable {
 
     // MARK: - Helpers
 
-    /// Converts chord name (e.g. "C", "Am", "G7", "F#m") to 3-4 MIDI pitch numbers (octave 3)
-    private func chordToMidi(_ chord: String) -> [Int]? {
+    /// Converts chord name (e.g. "C", "Am", "Bm", "G7", "F#m", "Bb", "Ebmaj7") to 3-4 MIDI pitch numbers (octave 3)
+    public func chordToMidi(_ chord: String) -> [Int]? {
         let roots: [String: Int] = [
             "C": 48, "C#": 49, "DB": 49,
             "D": 50, "D#": 51, "EB": 51,
@@ -180,24 +224,73 @@ public final class MIDIExporter: @unchecked Sendable {
             "B": 59
         ]
 
-        let upper = chord.uppercased()
-        var root = ""
-        if upper.count >= 2 && (upper.contains("#") || upper.contains("B")) {
-            root = String(upper.prefix(2))
-        } else if let first = upper.first {
-            root = String(first)
+        let trimmed = chord.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+
+        let firstChar = String(trimmed.prefix(1)).uppercased()
+        guard ["A", "B", "C", "D", "E", "F", "G"].contains(firstChar) else { return nil }
+
+        var root = firstChar
+        var remainder = ""
+
+        let afterFirst = trimmed.dropFirst()
+        if afterFirst.hasPrefix("#") {
+            root = firstChar + "#"
+            remainder = String(afterFirst.dropFirst())
+        } else if afterFirst.hasPrefix("b") || (firstChar != "B" && afterFirst.hasPrefix("B")) {
+            root = firstChar + "B"
+            remainder = String(afterFirst.dropFirst())
+        } else {
+            root = firstChar
+            remainder = String(afterFirst)
         }
 
         guard let baseMidi = roots[root] else { return nil }
 
-        let isMinor = upper.contains("M") && !upper.contains("MAJ")
-        let thirdOffset = isMinor ? 3 : 4
-        let fifthOffset = 7
+        let remUpper = remainder.uppercased()
+        let isMinor = remUpper.hasPrefix("M") && !remUpper.hasPrefix("MAJ")
+        let isDim = remUpper.contains("DIM")
+        let isAug = remUpper.contains("AUG") || remUpper.contains("+")
+        let isSus4 = remUpper.contains("SUS4")
+        let isSus2 = remUpper.contains("SUS2")
+
+        let thirdOffset: Int
+        let fifthOffset: Int
+
+        if isDim {
+            thirdOffset = 3
+            fifthOffset = 6
+        } else if isAug {
+            thirdOffset = 4
+            fifthOffset = 8
+        } else if isSus4 {
+            thirdOffset = 5
+            fifthOffset = 7
+        } else if isSus2 {
+            thirdOffset = 2
+            fifthOffset = 7
+        } else if isMinor {
+            thirdOffset = 3
+            fifthOffset = 7
+        } else {
+            thirdOffset = 4
+            fifthOffset = 7
+        }
 
         var pitches = [baseMidi, baseMidi + thirdOffset, baseMidi + fifthOffset]
-        if upper.contains("7") {
-            let seventhOffset = isMinor ? 10 : (upper.contains("MAJ7") ? 11 : 10)
+
+        if remUpper.contains("7") {
+            let seventhOffset: Int
+            if isDim && remUpper.contains("DIM7") {
+                seventhOffset = 9
+            } else if remUpper.contains("MAJ7") {
+                seventhOffset = 11
+            } else {
+                seventhOffset = 10 // Dominant or Minor 7th
+            }
             pitches.append(baseMidi + seventhOffset)
+        } else if remUpper.contains("6") {
+            pitches.append(baseMidi + 9)
         }
 
         return pitches

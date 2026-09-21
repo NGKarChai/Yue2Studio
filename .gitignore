@@ -22,7 +22,7 @@ Yue2Studio.app/
 /mlx.metallib
 
 # Heavy Model Weights (downloaded dynamically or stored separately)
-Models/
+/Models/
 
 # Generated Audio Outputs
 Generations/*
@@ -67,5 +67,6 @@ YuePythonStudio/.venv/
 # Editor & IDE
 .idea/
 .vscode/
-*.swp
-*~
+# SQLite temporary files
+*.sqlite3-shm
+*.sqlite3-wal

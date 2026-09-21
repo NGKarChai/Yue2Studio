@@ -12,47 +12,62 @@ public struct ModelManagerView: View {
         VStack(alignment: .leading, spacing: 20) {
             // Header & Path Selector
             VStack(alignment: .leading, spacing: 8) {
-                Text("Model Storage & Weight Manager")
+                Text("YuE2 Model Storage & Weight Manager")
                     .font(.title2)
                     .fontWeight(.bold)
 
-                Text("Configure local model directories or download required stage weights directly into the application folder. YuE executes natively on Apple Silicon with zero Python dependencies.")
+                Text("Configure local model directories or download required YuE2 weights directly into the application folder. YuE2 executes natively on Apple Silicon via MLX Flow Matching + 48kHz VAE with zero Python dependencies.")
                     .font(.callout)
                     .foregroundColor(.secondary)
 
-                HStack {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Active Weights Directory")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        HStack {
-                            Image(systemName: "folder")
+                // YuE2-3B Generator & VAE Configuration
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("YuE2-3B Weights (vanch007/mlx-Yue2-3B)")
+                                .font(.caption)
                                 .foregroundColor(.secondary)
-                            Text(appState.modelDirectoryPath)
-                                .font(.system(.body, design: .monospaced))
+                            HStack {
+                                Image(systemName: "folder")
+                                    .foregroundColor(.secondary)
+                                Text(appState.yue2ModelDirectory)
+                                    .font(.system(.body, design: .monospaced))
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(6)
                         }
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(NSColor.textBackgroundColor))
-                        .cornerRadius(6)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color(NSColor.separatorColor), lineWidth: 1)
-                        )
+                        Button("Browse...") {
+                            selectDirectory { path in
+                                appState.setYuE2ModelDirectory(path)
+                            }
+                        }
+                        .padding(.top, 16)
                     }
 
-                    VStack(spacing: 4) {
-                        Text(" ")
-                            .font(.caption)
-                        HStack {
-                            Button("Browse...") {
-                                selectCustomDirectory()
+                    HStack {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("YuE2 48kHz Oobleck VAE (m-a-p/YuE2-Vae)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            HStack {
+                                Image(systemName: "waveform")
+                                    .foregroundColor(.secondary)
+                                Text(appState.yue2VAEDirectory)
+                                    .font(.system(.body, design: .monospaced))
                             }
-                            Button("Reset to ./Models") {
-                                appState.setModelDirectory(newPath: "Models")
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(NSColor.textBackgroundColor))
+                            .cornerRadius(6)
+                        }
+                        Button("Browse...") {
+                            selectDirectory { path in
+                                appState.setYuE2VAEDirectory(path)
                             }
                         }
+                        .padding(.top, 16)
                     }
                 }
             }
@@ -89,8 +104,9 @@ public struct ModelManagerView: View {
     }
 
     private func modelRow(for item: ModelItem) -> some View {
+        _ = appState.downloadProgressTick
         let download = appState.downloadManager.activeDownloads[item.id]
-        let stageURL = URL(fileURLWithPath: appState.modelDirectoryPath).appendingPathComponent(item.stage)
+        let stageURL = appState.directoryURL(for: item)
         let hasWeights = appState.directoryHasWeights(stageURL)
         let sizeOnDisk = appState.directoryWeightSizeString(stageURL)
         let manifest = ModelDownloadManager.stageManifests[item.id]
@@ -198,20 +214,21 @@ public struct ModelManagerView: View {
         .cornerRadius(10)
     }
 
-    private func selectCustomDirectory() {
+
+    private func selectDirectory(completion: (String) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
         panel.allowsMultipleSelection = false
-        panel.prompt = "Select Model Folder"
+        panel.prompt = "Select Folder"
 
         if panel.runModal() == .OK, let url = panel.url {
-            appState.setModelDirectory(newPath: url.path)
+            completion(url.path)
         }
     }
 
     private func triggerDownload(for item: ModelItem) {
-        let destURL = URL(fileURLWithPath: appState.modelDirectoryPath).appendingPathComponent(item.stage)
+        let destURL = appState.directoryURL(for: item)
         appState.downloadManager.downloadStage(id: item.id, name: item.name, to: destURL)
     }
 }

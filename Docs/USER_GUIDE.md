@@ -1,16 +1,28 @@
 # YuE Native macOS Studio - User Guide
 
-## 1. Quick Start
-### Building & Running
-From the terminal in the project directory:
+## 1. Quick Start & DMG Installation
+### Installing on Other Macs via DMG
+The application is distributed as a standalone macOS disk image (`.dmg`):
+- **DMG Installer File**: `Yue2Studio-2026092201.dmg` (also accessible as `Yue2Studio.dmg`)
+- **Installation**:
+  1. Double-click `Yue2Studio-2026092114.dmg` to mount the disk image.
+  2. Drag the `Yue2Studio` application icon into the `Applications` folder symlink.
+  3. Open `Applications` and launch `Yue2Studio`.
+- **Gatekeeper First-Launch Tip**:
+  If macOS shows a security warning that the developer cannot be verified:
+  - Right-click (or Control-click) `Yue2Studio` in the `Applications` folder and select **Open**.
+  - Click **Open** in the confirmation dialog. (Only needed once on first launch).
+- **Rebuilding the DMG**:
+  Run `./scripts/create_dmg.sh` to package a fresh release DMG.
+
+### Running from Project Directory (Development)
 ```bash
-# Option 1: Open the local application bundle directly (recommended)
+# Option 1: Open the local application bundle directly
 open Yue2Studio.app
 
 # Option 2: Run via Swift Package Manager
 swift run Yue2Studio
 ```
-No installation to `/Applications` is required. The binary runs directly from the project folder.
 
 ## 2. Interface Overview
 - **Sidebar**:
@@ -19,7 +31,7 @@ No installation to `/Applications` is required. The binary runs directly from th
   - **Library**: Historical generation archive with instant playback and export options.
   - **Settings**: Audio device output, default inference precision (4-bit / 8-bit / 16-bit), and memory management options.
 - **Footer**:
-  - Displays the current Build Number (`2026092101`), active model directory, and real-time unified memory usage.
+  - Displays the current Build Number (`2026092201`), active model directory, and real-time unified memory usage.
 
 ## 3. Formatting Prompts & Lyrics
 YuE recognizes structural song tags in lyrics:
@@ -62,53 +74,61 @@ Nothing holding back the flame
   - `100% (Wide Stereo)`: Full stereo panorama.
 - **Headroom & Anti-Clipping Limiter**: Automatically normalizes master audio to -2.0 dBFS true peak with a soft-knee saturation curve, eliminating inter-sample distortion when CoreAudio resamples 16 kHz to 48 kHz hardware output.
 
-## 5. Audio Reference & Cover Song Creation Studio
+## 5. Full Audio Transcription & Cover Chain Studio
 
-YuE2 Studio provides native audio track reference conditioning and cover creation tools:
+YuE2 Studio provides an end-to-end native music transcription and cover song creation suite:
 
-### 5.1 Uploading Audio References
+### 5.1 Uploading & Multi-Window Audio Transcription
 - Click **Upload Reference Audio Track** in the Cover Studio card or drag-and-drop any audio file (`.wav`, `.mp3`, `.m4a`, `.flac`, `.aiff`).
-- The app automatically resamples the input to 16.0 kHz Float32 and uses Apple `Accelerate` `vDSP` normalized autocorrelation to track pitch contours ($F_0$) and detect the key signature.
+- **Multi-Window Stitching for Arbitrarily Long Tracks**:
+  - Automatically slices long tracks into 30-second sliding windows with 10-second overlaps and bounded memory usage ($O(1)$ memory consumption).
+  - Merges seam notes across window boundaries via `stitchNotes` with a 60ms gap/overlap threshold and pitch matching.
+  - Automatically detects the key signature using the Krumhansl-Schmuckler harmonic algorithm.
 
 ### 5.2 Conditioning Modes
-- **Melody Only (Vocal)**: Extracts the vocal melody line into a clean ABC score and conditions YuE Stage 1 using `cot="melody"`. The vocal melody is preserved while the instrumental accompaniment, genre, rhythm, and arrangement are completely transformed according to your prompt.
-- **Full Reference (Song)**: Encodes the full audio track into Stage 1 reference codec tokens (`[start_of_reference] ... [end_of_reference]`), guiding YuE to capture overall acoustic timbre, vocal nuance, and arrangement from the original.
+- **Melody Only (Vocal)**: Extracts the vocal melody line into an editable ABC score and conditions generation using `cot="melody"`. The melody is preserved while the instrumental backing, genre, groove, and arrangement are completely transformed according to your target prompt.
+- **Full Reference (Song)**: Encodes full audio reference tokens into Stage 1 reference codebooks, guiding YuE to capture overall instrumentation, groove, and vocal style.
 
-### 5.3 Key & Modal Manipulation
-- **Semitone Pitch Transposition**: Use the slider or `-` / `+` buttons to shift the key signature, chords, and melody up or down by $\pm 12$ semitones. Perfect for adapting a vocal melody to a different singer's range (e.g. female to male vocal range).
+### 5.3 1-Click End-to-End Cover Pipeline
+- Click **⚡️ Prime 1-Click Cover Pipeline** or choose one of the quick style morphing presets:
+  - **80s Synthwave**: Retro analog synths, driving LinnDrum, neon pads, 124 BPM.
+  - **Acoustic Folk**: Fingerpicked warm guitar, soft strings, intimate vocal warmth, 110 BPM.
+  - **Cyberpunk EDM**: Massive saw synths, aggressive sidechained drops, 128 BPM.
+  - **Lo-Fi Jazz Pop**: Mellow Rhodes piano, vinyl crackle, relaxed soulful vocal, 85 BPM.
+  - **Rock Anthem**: Distorted electric guitars, live stadium drums, soaring rock vocals, 130 BPM.
+- Priming extracts the melody score, sets the generation mode to `Melody + Supplied ABC Score` (`melodySupplied`), sets the song title, and locks the score. Simply hit **Generate Song** to re-synthesize!
+
+### 5.4 Key & Modal Manipulation
+- **Semitone Pitch Transposition**: Shift key signature, chords, and melody up or down across a $\pm 12$ semitone range. Perfect for adapting vocals across vocal registers (e.g. female to male vocal range).
 - **Major $\leftrightarrow$ Minor Modal Modulation**:
-  - `Major -> Minor (Melancholic)`: Flattens the 3rd, 6th, and 7th scale degrees and transforms major chords to minor triads (`C` $\to$ `Cm`, `G` $\to$ `Gm`), turning uplifting pop songs into moody, melancholic ballads.
+  - `Major -> Minor (Melancholic)`: Flattens the 3rd, 6th, and 7th scale degrees and transforms major chords to minor triads (`C` $\to$ `Cm`, `G` $\to$ `Gm`).
   - `Minor -> Major (Uplifting)`: Elevates minor melodies into bright, triumphant major keys.
 - **Extract Melody to Score**: Transcribes detected audio pitches into editable ABC notation and interactive sheet music.
-- **Align Lyrics to Melody**: Strips previous lyrics and syllabically aligns your new structured lyrics under each melodic note.
+- **Align Lyrics to Melody**: Syllabically aligns your structured lyrics under each transcribed melodic note.
 
-## 6. YuE2 Symbolic Planning & Sheet Music Score
+## 6. YuE2 Generation Modes (`vanch007/mlx-Yue` Specification)
 
-YuE2 introduces **Symbolic Planning**, which separates musical composition from acoustic rendering:
+YuE2 features 5 official generation modes in the **YuE2 Generation Mode** picker:
+1. **Full + Generated Score (`fullGenerated`)**: Fully automated song writing, score planning, and 48kHz audio generation from prompt and lyrics.
+2. **Full + Supplied ABC Score (`fullSupplied`)**: Composes audio conditioned on user-supplied ABC notation (melody + chord accompaniment).
+3. **Melody + Generated Score (`melodyGenerated`)**: Automatic lead-sheet melody generation without chord symbols, followed by acoustic rendering.
+4. **Melody + Supplied ABC Score (`melodySupplied`)**: Conditions acoustic synthesis on an exact melody line from your transcribed reference or custom score.
+5. **Off (Direct Generation) (`direct`)**: Generates music and vocals directly from style prompt and lyrics without a symbolic score.
 
-### 6.1 Composition Modes
-Select your desired mode using the **Composition & Planning Mode** picker in the Studio tab:
-1. **Symbolic Plan (Full Score)**: Plans melody, chord progression, key signature, tempo, and rhythm in standard **ABC notation** before synthesizing acoustic latents.
-2. **Zero-Shot Cover** *(Recommended for Covers)*: Uses your reference melody or custom ABC score and prompts YuE2 to arrange and sing a cover in any target genre or vocal style.
-3. **Direct Audio (Fast)**: Bypasses symbolic planning and generates acoustic audio directly.
-
-### 6.2 Musical Notes Viewer & Sheet Music
-In **Symbolic Plan** or **Zero-Shot Cover** mode:
-- **Sheet Music View**: Renders the musical score visually:
-  - Displays Key Signature, Meter / Time Signature (e.g. 4/4), and Tempo (BPM).
-  - Shows chord symbols (e.g., `"C"`, `"G"`, `"Am"`, `"F"`) placed above measures.
-  - Displays melodic notes with pitch steps (A–G), sharps (♯), flats (♭), octaves, note durations, rests, and aligned lyrical syllables.
-- **ABC Code Editor**: Switch to the **ABC Code** tab to edit the raw ABC score directly. Changes are automatically updated in the visual score and fed into the audio synthesizer.
-
-## 7. Exporting Musical Notes
-Click the **Export Notes** menu in the Score header to export the composition to standard file formats:
+## 7. Tri-Format Audio Transcription & Notes Export
+Click the **Export Notes** menu in the Score editor or **Export Bundle (ABC + MIDI + LAB)** in Cover Studio:
 - **Export MIDI (`.mid`)**:
-  - Standard MIDI File (SMF Format 1) with Conductor Track (Tempo, Meter, Key), Melodic Lead Track (480 ticks/quarter resolution), and Polyphonic Chord Accompaniment.
-  - Ready for import into Logic Pro, GarageBand, Ableton Live, FL Studio, or Pro Tools.
-- **Export MusicXML (`.musicxml`)**:
-  - Standard MusicXML 4.0 file format compatible with MuseScore, Sibelius, Finale, and Dorico.
+  - Standard MIDI File (SMF Format 1) playable in all standard players (QuickTime, GarageBand, Logic Pro, VLC).
+  - General MIDI Program Change 0 (Acoustic Grand Piano), CC 7 Volume (127/96), CC 10 Center Pan, and sustained chord accompaniment.
+- **Export Timing Labels (`.lab`)**:
+  - SheetSage2 & MERT2 compliant tab-delimited timing label format (`<start>\t<end>\t<label>`):
+    - `_notes.lab`: Exact note start and end timestamps (e.g., `0.000\t0.500\tC4`).
+    - `_chords.lab`: Harmonic progression timeline (e.g., `0.000\t2.000\tC:maj`).
+    - `_structure.lab`: Section timing markers (e.g., `0.000\t15.000\tintro`).
 - **Export ABC Score (`.abc`)**:
-  - Plaintext ABC music score format for easy sharing, archival, and web notation.
+  - Complete ABC score without note truncation, wrapped in standard 4-bar measures.
+- **Export Complete Bundle (ABC + MIDI + LAB)**:
+  - 1-click export of all 5 transcription files (`.abc`, `.mid`, `_notes.lab`, `_chords.lab`, `_structure.lab`) into your chosen directory.
 
 ## 8. Audio Playback and Export
 - Once generation finishes, the song appears in the **Waveform Player**.

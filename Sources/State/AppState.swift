@@ -4,7 +4,7 @@ import AVFoundation
 
 @Observable
 public final class AppState: @unchecked Sendable {
-    public static let buildNumber = "2026092101"
+    public static let buildNumber = "2026092201"
 
     // Core Pipeline Engines
     public let database: SQLiteDatabase
@@ -12,10 +12,15 @@ public final class AppState: @unchecked Sendable {
     public let generationRepo: GenerationRepository
     public let modelRepo: ModelRegistryRepository
     public let presetRepo: PresetRepository
-    public let pipeline: YuEPipeline
+    public let yue2Pipeline: YuE2Pipeline
     public let audioPlayer: AudioPlaybackEngine
     public let downloadManager: ModelDownloadManager
     public let referenceManager = AudioReferenceManager.shared
+
+    // YuE2 Model Configurations
+    public var yue2FlowSteps: Int = 32
+    public var yue2ModelDirectory: String = "Models/yue2-3b"
+    public var yue2VAEDirectory: String = "Models/yue2-vae"
 
     // UI Navigation
     public enum NavigationTab: String, CaseIterable, Identifiable {
@@ -68,13 +73,6 @@ public final class AppState: @unchecked Sendable {
     public var seed: Int = Int.random(in: 1000...999999)
     public var autoSeed: Bool = true
     public var quantizationPrecision: String = "4-bit"
-    public var autoUnloadStage1: Bool = true
-    public var stage2Quality: Stage2Quality = .full
-
-    public func setStage2Quality(_ quality: Stage2Quality) {
-        self.stage2Quality = quality
-        settingsRepo.set(key: .stage2Quality, value: quality.rawValue)
-    }
 
     // Audio Reference & Cover Song Creation
     public var referenceAudioURL: URL?
@@ -85,6 +83,7 @@ public final class AppState: @unchecked Sendable {
     public var modeTransform: ModeTransform = .none
     public var isAnalyzingReference: Bool = false
     public var referenceAnalysis: ReferenceAudioAnalysis?
+    public var coverPipelineStatus: String?
 
     public func setReferenceMode(_ mode: ReferenceMode) {
         self.referenceMode = mode
@@ -103,7 +102,7 @@ public final class AppState: @unchecked Sendable {
                     self.referenceAnalysis = analysis
                     self.referenceAudioDuration = analysis.durationSeconds
                     self.isAnalyzingReference = false
-                    if self.planningMode == .melodyCover || self.currentScore.isEmpty {
+                    if self.planningMode.isSupplied || self.currentScore.isEmpty {
                         self.currentScore = analysis.abcNotation
                     }
                 }
@@ -120,7 +119,7 @@ public final class AppState: @unchecked Sendable {
         if let analysis = referenceAnalysis {
             self.currentScore = analysis.abcNotation
         } else if let url = referenceAudioURL {
-            loadReferenceAudio(url: url)
+            self.loadReferenceAudio(url: url)
         }
     }
 
@@ -139,6 +138,10 @@ public final class AppState: @unchecked Sendable {
         settingsRepo.set(key: .keyShiftSemitones, value: "\(self.keyShiftSemitones)")
     }
 
+    public func transposeScore(semitones: Int) {
+        applyKeyShift(delta: semitones)
+    }
+
     public func applyModeTransform(_ transform: ModeTransform) {
         self.modeTransform = transform
         self.currentScore = symbolicPlanner.modulateMode(abc: self.currentScore, transform: transform)
@@ -148,17 +151,97 @@ public final class AppState: @unchecked Sendable {
         self.currentScore = symbolicPlanner.rewriteLyrics(abc: self.currentScore, newLyrics: self.lyrics)
     }
 
+    /// End-to-End Cover Pipeline:
+    /// Transcribes source audio -> extracts melody & structure -> sets mode to melodySupplied/fullSupplied -> primes re-synthesis with target styles
+    public func prepareCoverPipeline(targetGenre: String? = nil) {
+        if let analysis = referenceAnalysis {
+            self.currentScore = analysis.abcNotation
+        } else if let url = referenceAudioURL {
+            self.loadReferenceAudio(url: url)
+        }
+
+        // Set mode based on referenceMode
+        if self.referenceMode == .fullReference {
+            self.planningMode = .fullSupplied
+        } else {
+            self.planningMode = .melodySupplied
+        }
+
+        if let targetGenre = targetGenre, !targetGenre.isEmpty {
+            self.genreTags = targetGenre
+        }
+
+        if self.songTitle.isEmpty || self.songTitle == "Untitled Song" {
+            let baseName = referenceAudioName?.replacingOccurrences(of: "\\.[^.]+$", with: "", options: .regularExpression) ?? "Source Track"
+            self.songTitle = "Cover of \(baseName)"
+        }
+
+        self.coverPipelineStatus = "Cover pipeline primed: Melodic score extracted, mode set to \(planningMode.rawValue). Ready to re-synthesize!"
+    }
+
+    /// Exports complete transcription bundle: ABC notation, playable MIDI file, and SheetSage2/MERT2 LAB timing labels
+    public func exportTranscriptionBundle(directory: URL, baseName: String) throws -> [URL] {
+        let name = baseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "transcription" : baseName
+        let cleanName = name.replacingOccurrences(of: " ", with: "_")
+        let effectiveScore = self.currentScore.isEmpty ? (self.referenceAnalysis?.abcNotation ?? "") : self.currentScore
+        guard !effectiveScore.isEmpty else {
+            throw NSError(domain: "AppState", code: 400, userInfo: [NSLocalizedDescriptionKey: "No musical score or transcribed audio available to export."])
+        }
+
+        var exportedURLs: [URL] = []
+
+        // 1. ABC Score (.abc)
+        let abcURL = directory.appendingPathComponent("\(cleanName).abc")
+        try effectiveScore.write(to: abcURL, atomically: true, encoding: .utf8)
+        exportedURLs.append(abcURL)
+
+        // 2. Playable Standard MIDI File (.mid)
+        let midiURL = directory.appendingPathComponent("\(cleanName).mid")
+        let parsedScore = symbolicPlanner.parseScore(abc: effectiveScore)
+        let midiData = MIDIExporter().export(score: parsedScore)
+        try midiData.write(to: midiURL)
+        exportedURLs.append(midiURL)
+
+        // 3. Note Timing Labels (.lab)
+        let labURL = directory.appendingPathComponent("\(cleanName)_notes.lab")
+        let notesLab = self.referenceAnalysis?.labNotation ?? {
+            var lines: [String] = []
+            var t = 0.0
+            for measure in parsedScore.measures {
+                for note in measure.notes {
+                    let durSec = (note.durationBeats / (max(20.0, parsedScore.tempoBpm) / 60.0))
+                    if let pitch = note.pitch {
+                        let noteName = "\(pitch.step)\(pitch.alter == 1 ? "#" : (pitch.alter == -1 ? "b" : ""))"
+                        lines.append(String(format: "%.3f\t%.3f\t%@%d", t, t + durSec, noteName, pitch.octave))
+                    }
+                    t += durSec
+                }
+            }
+            return lines.joined(separator: "\n")
+        }()
+        try notesLab.write(to: labURL, atomically: true, encoding: .utf8)
+        exportedURLs.append(labURL)
+
+        // 4. Chords Timing Labels (.lab)
+        let chordsURL = directory.appendingPathComponent("\(cleanName)_chords.lab")
+        let chordsLab = self.referenceAnalysis?.chordsLabNotation ?? "0.000\t4.000\t\(parsedScore.keySignature):maj"
+        try chordsLab.write(to: chordsURL, atomically: true, encoding: .utf8)
+        exportedURLs.append(chordsURL)
+
+        // 5. Song Structure Timing Labels (.lab)
+        let structURL = directory.appendingPathComponent("\(cleanName)_structure.lab")
+        let structLab = self.referenceAnalysis?.structureLabNotation ?? referenceManager.generateStructureLAB(lyrics: self.lyrics, duration: self.referenceAudioDuration ?? 30.0)
+        try structLab.write(to: structURL, atomically: true, encoding: .utf8)
+        exportedURLs.append(structURL)
+
+        return exportedURLs
+    }
+
     // YuE2 Symbolic Music Planning & Notation
     public var currentScore: String = ""
-    public var planningMode: PlanningMode = .melodyCover {
+    public var planningMode: PlanningMode = .fullGenerated {
         didSet {
-            let str: String
-            switch planningMode {
-            case .fullPlan: str = "symbolic"
-            case .melodyCover: str = "melody_cover"
-            case .directAudio: str = "direct"
-            }
-            settingsRepo.set(key: .planningMode, value: str)
+            settingsRepo.set(key: .planningMode, value: planningMode.rawValue)
         }
     }
     public let symbolicPlanner = SymbolicPlanner()
@@ -218,6 +301,7 @@ public final class AppState: @unchecked Sendable {
     public var modelDirectoryPath: String = AppPaths.defaultModelsURL.path
     public var modelList: [ModelItem] = []
     public var isModelsReady: Bool = false
+    public var downloadProgressTick: Int = 0
 
     // Presets & History
     public var presetGenres: [PresetGenre] = []
@@ -248,10 +332,10 @@ public final class AppState: @unchecked Sendable {
             self.modelRepo = ModelRegistryRepository(database: db)
             self.presetRepo = PresetRepository(database: db)
         } catch {
-            fatalError("Failed to initialize database: \(error)")
+            fatalError("Failed to initialize SQLite database at \(dbPath): \(error)")
         }
 
-        self.pipeline = YuEPipeline()
+        self.yue2Pipeline = YuE2Pipeline()
         self.audioPlayer = AudioPlaybackEngine()
         let dm = ModelDownloadManager()
         self.downloadManager = dm
@@ -265,9 +349,16 @@ public final class AppState: @unchecked Sendable {
         loadPersistedState()
         refreshMemoryStats()
 
+        dm.onProgressUpdated = { [weak self] in
+            Task { @MainActor in
+                self?.downloadProgressTick += 1
+            }
+        }
+
         dm.onStageCompleted = { [weak self] _ in
             Task { @MainActor in
                 self?.checkModelsAvailability()
+                self?.downloadProgressTick += 1
             }
         }
     }
@@ -293,20 +384,8 @@ public final class AppState: @unchecked Sendable {
         if let maxTStr = settingsRepo.get(key: .defaultMaxTokens), let m = Int(maxTStr) {
             self.maxTokens = m
         }
-        if let unloadStr = settingsRepo.get(key: .autoUnloadStage1) {
-            self.autoUnloadStage1 = (unloadStr == "true")
-        }
-        if let lvlStr = settingsRepo.get(key: .levelingEnabled) {
-            self.levelingEnabled = (lvlStr == "true")
-        }
-        if let upsStr = settingsRepo.get(key: .upsampleEnabled) {
-            self.upsampleEnabled = (upsStr == "true")
-        }
         if let masteringStr = settingsRepo.get(key: .masteringEnabled) {
             self.masteringEnabled = (masteringStr == "true")
-        }
-        if let qualityStr = settingsRepo.get(key: .stage2Quality), let q = Stage2Quality(rawValue: qualityStr) {
-            self.stage2Quality = q
         }
         if let refModeStr = settingsRepo.get(key: .referenceMode), let rm = ReferenceMode(rawValue: refModeStr) {
             self.referenceMode = rm
@@ -315,12 +394,14 @@ public final class AppState: @unchecked Sendable {
             self.keyShiftSemitones = k
         }
         if let planStr = settingsRepo.get(key: .planningMode) {
-            if planStr == "symbolic" {
-                self.planningMode = .fullPlan
+            if let mode = PlanningMode(rawValue: planStr) {
+                self.planningMode = mode
+            } else if planStr == "symbolic" {
+                self.planningMode = .fullGenerated
             } else if planStr == "melody_cover" {
-                self.planningMode = .melodyCover
+                self.planningMode = .melodySupplied
             } else if planStr == "direct" {
-                self.planningMode = .directAudio
+                self.planningMode = .direct
             }
         }
         if let targetRMSStr = settingsRepo.get(key: .masteringTargetRMS), let tr = Float(targetRMSStr) {
@@ -333,12 +414,36 @@ public final class AppState: @unchecked Sendable {
             self.playerMonitoringVolume = v
             self.audioPlayer.volume = v
         }
+        if let stepsStr = settingsRepo.get(key: .yue2FlowSteps), let s = Int(stepsStr) {
+            self.yue2FlowSteps = s
+        }
+        if let mDir = settingsRepo.get(key: .yue2ModelDirectory), !mDir.isEmpty {
+            self.yue2ModelDirectory = AppPaths.resolvePath(mDir)
+        }
+        if let vDir = settingsRepo.get(key: .yue2VAEDirectory), !vDir.isEmpty {
+            self.yue2VAEDirectory = AppPaths.resolvePath(vDir)
+        }
 
         self.presetGenres = presetRepo.getGenres()
         self.presetLyrics = presetRepo.getLyrics()
         self.historyRecords = generationRepo.getAll()
         self.modelList = modelRepo.getAll()
         checkModelsAvailability()
+    }
+
+    public func setYuE2FlowSteps(_ steps: Int) {
+        self.yue2FlowSteps = steps
+        settingsRepo.set(key: .yue2FlowSteps, value: "\(steps)")
+    }
+
+    public func setYuE2ModelDirectory(_ path: String) {
+        self.yue2ModelDirectory = path
+        settingsRepo.set(key: .yue2ModelDirectory, value: path)
+    }
+
+    public func setYuE2VAEDirectory(_ path: String) {
+        self.yue2VAEDirectory = path
+        settingsRepo.set(key: .yue2VAEDirectory, value: path)
     }
 
     public func setModelDirectory(newPath: String) {
@@ -392,12 +497,26 @@ public final class AppState: @unchecked Sendable {
         return ByteCountFormatter.string(fromByteCount: total, countStyle: .file)
     }
 
+    public func directoryURL(for item: ModelItem) -> URL {
+        if item.id == "yue2-3b" {
+            return AppPaths.resolveURL(yue2ModelDirectory)
+        } else if item.id == "yue2-vae" {
+            return AppPaths.resolveURL(yue2VAEDirectory)
+        } else {
+            let rootURL = AppPaths.resolveURL(modelDirectoryPath)
+            if item.localPath.hasPrefix("Models/") {
+                let rel = String(item.localPath.dropFirst("Models/".count))
+                return rootURL.appendingPathComponent(rel)
+            }
+            return rootURL.appendingPathComponent(item.stage)
+        }
+    }
+
     public func checkModelsAvailability() {
-        let rootURL = AppPaths.resolveURL(modelDirectoryPath)
         var allExist = true
 
         for item in modelList {
-            let stageDir = rootURL.appendingPathComponent(item.stage)
+            let stageDir = directoryURL(for: item)
             let exists = directoryHasWeights(stageDir)
             modelRepo.updateStatus(id: item.id, status: exists ? "ready" : "not_downloaded")
             if !exists {
@@ -436,17 +555,15 @@ public final class AppState: @unchecked Sendable {
         guard !isGenerating else { return }
 
         // Safeguard: Check if weights exist before launching inference
-        let modelsURL = AppPaths.resolveURL(modelDirectoryPath)
-        let stage1URL = modelsURL.appendingPathComponent("stage1")
-        if !directoryHasWeights(stage1URL) {
-            self.missingModelsMessage = "Stage 1 model weights are not found in '\(stage1URL.path)'. Please go to the Model Manager tab to download the required weights, or choose a folder containing converted YuE safetensors.\n\nTip: You can click 'Demo Preview' to test the audio player and waveform immediately!"
+        let yue2ModelURL = AppPaths.resolveURL(yue2ModelDirectory)
+        if !directoryHasWeights(yue2ModelURL) {
+            self.missingModelsMessage = "YuE2-3B model weights are not found in '\(yue2ModelURL.path)'. Please go to the Model Manager tab to download YuE2-3B weights, or configure the directory."
             self.showMissingModelsAlert = true
             return
         }
-
-        let xcodecURL = modelsURL.appendingPathComponent("xcodec")
-        if !directoryHasWeights(xcodecURL) {
-            self.missingModelsMessage = "X-Codec neural vocoder weights ('decoder.safetensors') are not found in '\(xcodecURL.path)'. Please check that your model directory contains the X-Codec decoder weights."
+        let yue2VAEURL = AppPaths.resolveURL(yue2VAEDirectory)
+        if !directoryHasWeights(yue2VAEURL) {
+            self.missingModelsMessage = "YuE2 48kHz VAE weights are not found in '\(yue2VAEURL.path)'. Please go to the Model Manager tab to download YuE2-Vae weights, or configure the directory."
             self.showMissingModelsAlert = true
             return
         }
@@ -465,46 +582,23 @@ public final class AppState: @unchecked Sendable {
         let title = songTitle.isEmpty ? "Song \(Date().formatted(date: .numeric, time: .shortened))" : songTitle
         let tags = genreTags
         let currentLyrics = lyrics
-        let unloadStage1 = autoUnloadStage1
-        let currentPrecision = quantizationPrecision
-        let currentQuality = stage2Quality
-        let currentWidth = stereoWidth
-        let currentMastering = masteringEnabled
-        let currentUpsample = upsampleEnabled
-        let currentLeveling = levelingEnabled
-        let scoreToUse = (planningMode == .directAudio) ? nil : currentScore
-        let cotToUse = (planningMode == .melodyCover) ? "melody" : "full"
-        let currentRefURL = referenceAudioURL
-        let currentRefMode = referenceMode
-        let currentRefPrompt = referenceAnalysis?.referenceTokens.map { String($0) }.joined(separator: " ")
-
-        let samplingParams = SamplingParameters(
-            temperature: Float(currentTemp),
-            topP: Float(currentTopP),
-            cfgScale: Float(currentCFG),
-            seed: UInt64(currentSeed)
-        )
+        let scoreToUse = (planningMode == .direct) ? nil : currentScore
+        let yue2Steps = self.yue2FlowSteps
 
         Task {
             do {
-                let buffer = try await pipeline.generateSong(
-                    genreTags: tags,
+                let buffer = try await yue2Pipeline.generateSong(
+                    prompt: tags,
                     lyrics: currentLyrics,
-                    scoreABC: scoreToUse,
-                    cotMode: cotToUse,
-                    modelsDir: modelsURL,
+                    abcScore: scoreToUse,
+                    planningMode: planningMode,
                     maxTokens: currentTokens,
-                    params: samplingParams,
-                    precision: currentPrecision,
-                    stage2Quality: currentQuality,
-                    referenceAudioURL: currentRefURL,
-                    referenceMode: currentRefMode,
-                    referencePrompt: currentRefPrompt,
-                    autoUnloadStage1: unloadStage1,
-                    stereoWidth: currentWidth,
-                    applyMastering: currentMastering,
-                    upsampleEnabled: currentUpsample,
-                    levelingEnabled: currentLeveling
+                    steps: yue2Steps,
+                    temperature: Float(currentTemp),
+                    topP: Float(currentTopP),
+                    cfgScale: Float(currentCFG),
+                    modelDirectory: yue2ModelURL,
+                    vaeDirectory: yue2VAEURL
                 ) { [weak self] progress in
                     Task { @MainActor in
                         self?.currentProgress = progress
@@ -671,7 +765,7 @@ public final class AppState: @unchecked Sendable {
 
     public func cancelGeneration() {
         Task {
-            await pipeline.cancel()
+            await yue2Pipeline.cancel()
             await MainActor.run {
                 self.isGenerating = false
                 self.currentProgress = PipelineProgress(phase: .idle, statusMessage: "Generation cancelled.")

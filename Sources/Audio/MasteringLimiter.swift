@@ -118,12 +118,12 @@ public struct MasteringLimiter: Sendable {
 
     /// Process an AVAudioPCMBuffer in place or return a newly normalized buffer.
     public func processBuffer(_ buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer {
-        var channels = XCodecDecoder.channelArrays(from: buffer)
+        var channels = AudioBufferUtils.channelArrays(from: buffer)
         guard !channels.isEmpty else { return buffer }
 
         process(&channels)
 
-        if let mastered = XCodecDecoder.makeBuffer(
+        if let mastered = AudioBufferUtils.makeBuffer(
             channels: channels,
             sampleRate: buffer.format.sampleRate,
             targetPeak: nil

@@ -2,81 +2,100 @@ import SwiftUI
 
 public struct GenerationView: View {
     @Bindable var appState: AppState
+    @State private var showInspector: Bool = true
 
     public init(appState: AppState) {
         self.appState = appState
     }
 
     public var body: some View {
-        HStack(spacing: 0) {
-            // Left Panel: Studio Inputs & Audio Player in ScrollView
-            ScrollView(.vertical, showsIndicators: true) {
-                VStack(alignment: .leading, spacing: 14) {
-                    // Model Missing Warning Banner
-                    if !appState.isModelsReady {
-                        HStack(spacing: 10) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
-                                .font(.title3)
+        GeometryReader { geometry in
+            let inspectorWidth: CGFloat = 340
+            let rightPanelWidth: CGFloat = showInspector ? inspectorWidth : 0
+            let leftPanelWidth = showInspector
+                ? max(320, geometry.size.width - rightPanelWidth - 1)
+                : geometry.size.width
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Model Weights Not Downloaded")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                Text("Full generation requires stage weights in '\(appState.modelDirectoryPath)'. You can download weights in Model Manager or click Demo Preview to test the audio player right away.")
-                                    .font(.caption2)
-                                    .foregroundColor(.secondary)
+            HStack(spacing: 0) {
+                // Left Panel: Studio Inputs & Audio Player in ScrollView
+                ScrollView(.vertical, showsIndicators: true) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        // Model Missing Warning Banner
+                        if !appState.isModelsReady {
+                            HStack(spacing: 10) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.title3)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Model Weights Not Downloaded")
+                                        .font(.caption)
+                                        .fontWeight(.bold)
+                                    Text("Full generation requires stage weights in '\(appState.modelDirectoryPath)'. You can download weights in Model Manager or click Demo Preview to test the audio player right away.")
+                                        .font(.caption2)
+                                        .foregroundColor(.secondary)
+                                }
+
+                                Spacer()
+
+                                Button("Model Manager") {
+                                    appState.currentTab = .models
+                                }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
                             }
+                            .padding(10)
+                            .background(Color.orange.opacity(0.12))
+                            .cornerRadius(8)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+
+                        // Song Title & Presets bar
+                        HStack {
+                            TextField("Song Title", text: $appState.songTitle)
+                                .font(.headline)
+                                .textFieldStyle(.roundedBorder)
 
                             Spacer()
 
-                            Button("Model Manager") {
-                                appState.currentTab = .models
+                            // Presets Menu (from SQLite database)
+                            Menu {
+                                Section("Genre Presets") {
+                                    ForEach(appState.presetGenres) { preset in
+                                        Button(preset.name) {
+                                            appState.applyPresetGenre(preset)
+                                        }
+                                    }
+                                }
+                                Section("Lyric Templates") {
+                                    ForEach(appState.presetLyrics) { preset in
+                                        Button(preset.title) {
+                                            appState.applyPresetLyric(preset)
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "sparkles")
+                                    Text("Presets")
+                                }
+                                .font(.caption)
+                            }
+
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showInspector.toggle()
+                                }
+                            }) {
+                                Label(showInspector ? "Parameters" : "Show Parameters", systemImage: showInspector ? "sidebar.right" : "slider.horizontal.3")
+                                    .font(.caption)
                             }
                             .buttonStyle(.bordered)
-                            .controlSize(.small)
+                            .help("Toggle Parameter Inspector")
                         }
-                        .padding(10)
-                        .background(Color.orange.opacity(0.12))
-                        .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                        )
-                    }
-
-                    // Song Title & Presets bar
-                    HStack {
-                        TextField("Song Title", text: $appState.songTitle)
-                            .font(.headline)
-                            .textFieldStyle(.roundedBorder)
-
-                        Spacer()
-
-                        // Presets Menu (from SQLite database)
-                        Menu {
-                            Section("Genre Presets") {
-                                ForEach(appState.presetGenres) { preset in
-                                    Button(preset.name) {
-                                        appState.applyPresetGenre(preset)
-                                    }
-                                }
-                            }
-                            Section("Lyric Templates") {
-                                ForEach(appState.presetLyrics) { preset in
-                                    Button(preset.title) {
-                                        appState.applyPresetLyric(preset)
-                                    }
-                                }
-                            }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "sparkles")
-                                Text("Presets")
-                            }
-                            .font(.caption)
-                        }
-                    }
 
                     // Genre & Style Tags Input
                     VStack(alignment: .leading, spacing: 6) {
@@ -123,36 +142,47 @@ public struct GenerationView: View {
                             )
                     }
 
-                    // Composition & Planning Mode Selector
+                    // Composition & Planning Mode Selector (All 5 Official YuE2 Modes)
                     VStack(alignment: .leading, spacing: 6) {
-                        HStack {
-                            Text("COMPOSITION & PLANNING MODE")
+                        HStack(alignment: .center) {
+                            Text("YUE2 GENERATION MODE")
                                 .font(.caption2)
                                 .fontWeight(.bold)
                                 .foregroundColor(.secondary)
 
                             Spacer()
 
+                            Picker("Mode", selection: $appState.planningMode) {
+                                ForEach(PlanningMode.allCases) { mode in
+                                    Text(mode.rawValue).tag(mode)
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(minWidth: 260)
+                        }
+
+                        HStack(spacing: 6) {
+                            Image(systemName: "music.note.list")
+                                .font(.caption2)
+                                .foregroundColor(.accentColor)
                             Text(appState.planningMode.description)
                                 .font(.caption2)
                                 .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-
-                        Picker("Mode", selection: $appState.planningMode) {
-                            ForEach(PlanningMode.allCases) { mode in
-                                Text(mode.rawValue).tag(mode)
-                            }
-                        }
-                        .pickerStyle(.segmented)
                     }
+                    .padding(8)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.6))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
 
-                    // Audio Reference & Cover Song Creation Studio
-                    if appState.planningMode == .melodyCover || appState.referenceAudioURL != nil {
+                    // Audio Reference & Cover Song Creation Studio (active when supplied mode or reference audio loaded)
+                    if appState.planningMode.isSupplied || appState.referenceAudioURL != nil {
                         CoverStudioView(appState: appState)
                     }
 
-                    // YuE2 Symbolic Score Viewer & Editor (when in Symbolic Plan or Zero-Shot Cover mode)
-                    if appState.planningMode != .directAudio {
+                    // YuE2 Symbolic Score Viewer & Editor (active in all modes with symbolic score)
+                    if appState.planningMode != .direct {
                         ScoreEditorView(state: appState)
                     }
 
@@ -212,19 +242,23 @@ public struct GenerationView: View {
                     )
                 }
                 .padding(16)
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .frame(width: leftPanelWidth, alignment: .leading)
             }
-            .frame(maxWidth: .infinity)
+            .frame(width: leftPanelWidth, height: geometry.size.height)
 
-            Divider()
+            if showInspector {
+                Divider()
 
-            // Right Panel: Parameter Inspector (fixed comfortable width, never clipped)
-            ScrollView(.vertical, showsIndicators: true) {
-                ParameterView(appState: appState)
+                // Right Panel: Parameter Inspector (fixed comfortable width, never clipped)
+                ScrollView(.vertical, showsIndicators: true) {
+                    ParameterView(appState: appState)
+                }
+                .frame(width: rightPanelWidth, height: geometry.size.height)
+                .background(Color(NSColor.windowBackgroundColor))
             }
-            .frame(width: 320)
-            .background(Color(NSColor.windowBackgroundColor))
         }
+        .frame(width: geometry.size.width, height: geometry.size.height)
+    }
         .alert("Model Weights Required", isPresented: $appState.showMissingModelsAlert) {
             Button("Open Model Manager") {
                 appState.currentTab = .models

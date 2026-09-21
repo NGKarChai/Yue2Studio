@@ -21,6 +21,18 @@ public struct SettingsView: View {
                         .font(.system(.caption, design: .monospaced))
                         .foregroundColor(.secondary)
                 }
+
+                LabeledContent("YuE2-3B Models Path") {
+                    Text(appState.yue2ModelDirectory)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
+
+                LabeledContent("YuE2-VAE Path") {
+                    Text(appState.yue2VAEDirectory)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section("Apple Silicon & Unified Memory") {
@@ -29,24 +41,25 @@ public struct SettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
-                Toggle("Auto-Unload Stage 1 after coarse tokens", isOn: Binding(
-                    get: { appState.autoUnloadStage1 },
-                    set: {
-                        appState.autoUnloadStage1 = $0
-                        appState.settingsRepo.set(key: .autoUnloadStage1, value: $0 ? "true" : "false")
-                    }
-                ))
-                .help("Releases 7B model weights and KV-cache from unified memory before running acoustic refinement, preventing memory pressure on 16GB–24GB Apple Silicon Macs.")
+                LabeledContent("Compute Backend") {
+                    Text("Apple Silicon Metal GPU (Accelerated)")
+                        .foregroundColor(.secondary)
+                }
             }
 
             Section("Audio Engine") {
                 LabeledContent("Synthesis Sample Rate") {
-                    Text("44,100 Hz (CD Quality, 24-bit Float)")
+                    Text("48,000 Hz (Master Studio Quality, 32-bit Float)")
                         .foregroundColor(.secondary)
                 }
 
                 LabeledContent("Channels") {
                     Text("Stereo (2 Channels)")
+                        .foregroundColor(.secondary)
+                }
+
+                LabeledContent("Neural Vocoder") {
+                    Text("YuE2 Oobleck 48kHz VAE Decoder")
                         .foregroundColor(.secondary)
                 }
             }
@@ -60,6 +73,11 @@ public struct SettingsView: View {
 
                 LabeledContent("Runtime Engine") {
                     Text("Native Swift + Apple MLX + Metal (Zero Python)")
+                        .foregroundColor(.secondary)
+                }
+
+                LabeledContent("Architecture") {
+                    Text("YuE2-3B Flow Matching ODE")
                         .foregroundColor(.secondary)
                 }
             }

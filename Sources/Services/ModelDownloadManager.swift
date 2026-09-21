@@ -27,52 +27,30 @@ public struct StageManifest: Sendable {
 public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
     public private(set) var activeDownloads: [String: DownloadProgress] = [:]
     public var onStageCompleted: (@Sendable (String) -> Void)?
+    public var onProgressUpdated: (@Sendable () -> Void)?
 
     private var session: URLSession!
     private var activeTasks: [Int: (modelId: String, fileIndex: Int, destURL: URL, startTime: Date)] = [:]
     private var pendingQueues: [String: (modelName: String, repoId: String, destDir: URL, files: [String], currentIndex: Int)] = [:]
 
     public static let stageManifests: [String: StageManifest] = [
-        "stage1-7b-en": StageManifest(
-            repoId: "m-a-p/YuE-s1-7B-anneal-en-cot",
+        "yue2-3b": StageManifest(
+            repoId: "vanch007/mlx-Yue2-3B",
             files: [
                 "config.json",
-                "tokenizer.model",
-                "model.safetensors.index.json",
-                "model-00001-of-00003.safetensors",
-                "model-00002-of-00003.safetensors",
-                "model-00003-of-00003.safetensors"
+                "qwen.tiktoken",
+                "ar-8bit.safetensors",
+                "nar-bf16.safetensors"
             ],
-            totalEstimatedSize: "~13.8 GB"
+            totalEstimatedSize: "~5.2 GB"
         ),
-        "stage1-7b-zh": StageManifest(
-            repoId: "m-a-p/YuE-s1-7B-anneal-zh-cot",
+        "yue2-vae": StageManifest(
+            repoId: "m-a-p/YuE2-Vae",
             files: [
                 "config.json",
-                "tokenizer.model",
-                "model.safetensors.index.json",
-                "model-00001-of-00003.safetensors",
-                "model-00002-of-00003.safetensors",
-                "model-00003-of-00003.safetensors"
-            ],
-            totalEstimatedSize: "~13.8 GB"
-        ),
-        "stage2-1b": StageManifest(
-            repoId: "m-a-p/YuE-s2-1B-general",
-            files: [
-                "config.json",
-                "tokenizer.model",
                 "model.safetensors"
             ],
-            totalEstimatedSize: "~3.9 GB"
-        ),
-        "xcodec": StageManifest(
-            repoId: "Manel/YuE-XCodec",
-            files: [
-                "model.safetensors",
-                "config.json"
-            ],
-            totalEstimatedSize: "~743 MB"
+            totalEstimatedSize: "~506 MB"
         )
     ]
 
@@ -92,6 +70,10 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
         guard let manifest = Self.stageManifests[id] else {
             print("[ModelDownloadManager] No manifest found for stage \(id)")
             return
+        }
+
+        if !FileManager.default.fileExists(atPath: destinationDirectory.path) {
+            try? FileManager.default.createDirectory(at: destinationDirectory, withIntermediateDirectories: true)
         }
 
         pendingQueues[id] = (
@@ -114,6 +96,7 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
             speedString: "",
             status: "Initiating download (1/\(manifest.files.count))..."
         )
+        onProgressUpdated?()
 
         downloadNextFile(for: id)
     }
@@ -135,6 +118,7 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
                 speedString: "",
                 status: "Weights Installed"
             )
+            onProgressUpdated?()
             onStageCompleted?(id)
             return
         }
@@ -147,7 +131,10 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
             return
         }
 
-        let task = session.downloadTask(with: url)
+        var request = URLRequest(url: url)
+        request.setValue("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Yue2Studio/1.0", forHTTPHeaderField: "User-Agent")
+
+        let task = session.downloadTask(with: request)
         activeTasks[task.taskIdentifier] = (
             modelId: id,
             fileIndex: queue.currentIndex,
@@ -160,6 +147,7 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
         activeDownloads[id]?.currentFileIndex = queue.currentIndex + 1
         activeDownloads[id]?.status = "Downloading \(filename) (\(queue.currentIndex + 1)/\(queue.files.count))..."
 
+        onProgressUpdated?()
         task.resume()
     }
 
@@ -176,6 +164,7 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
         for tid in taskIdsToCancel {
             activeTasks.removeValue(forKey: tid)
         }
+        onProgressUpdated?()
     }
 
     // MARK: - URLSessionDownloadDelegate
@@ -214,6 +203,7 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
         )
 
         activeDownloads[entry.modelId] = current
+        onProgressUpdated?()
     }
 
     public func urlSession(
@@ -223,6 +213,16 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
     ) {
         guard let entry = activeTasks[downloadTask.taskIdentifier] else { return }
         activeTasks.removeValue(forKey: downloadTask.taskIdentifier)
+
+        if let httpResponse = downloadTask.response as? HTTPURLResponse {
+            if httpResponse.statusCode < 200 || httpResponse.statusCode >= 300 {
+                print("[ModelDownloadManager] HTTP error \(httpResponse.statusCode) downloading \(entry.destURL.lastPathComponent)")
+                activeDownloads[entry.modelId]?.status = "Download error: HTTP \(httpResponse.statusCode)"
+                pendingQueues.removeValue(forKey: entry.modelId)
+                onProgressUpdated?()
+                return
+            }
+        }
 
         do {
             let parentDir = entry.destURL.deletingLastPathComponent()
@@ -243,6 +243,7 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
             pendingQueues[entry.modelId] = queue
             downloadNextFile(for: entry.modelId)
         }
+        onProgressUpdated?()
     }
 
     public func urlSession(
@@ -257,6 +258,7 @@ public final class ModelDownloadManager: NSObject, URLSessionDownloadDelegate, @
             if nsErr.code != NSURLErrorCancelled {
                 activeDownloads[entry.modelId]?.status = "Download failed: \(error.localizedDescription)"
                 pendingQueues.removeValue(forKey: entry.modelId)
+                onProgressUpdated?()
             }
         }
     }

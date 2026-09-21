@@ -39,36 +39,47 @@ YuE Native macOS Studio is a 100% native Apple Silicon desktop application for m
    - 4-stage transposed convolution blocks (`ConvTransposed1d`, upsampling 8x * 5x * 4x * 2x = 320x) equipped with `Snake1d` periodic activation functions and multi-receptive field (MRF) dilated residual units (dilations 1, 3, 9).
    - Synthesizes studio-grade 16.0 kHz / 24-bit floating point PCM audio, automatically converted and resampled in real-time by AVAudioEngine to output hardware sample rate.
 
-### 2.3 Symbolic Music Engine & Notation Exporters
-- **Symbolic Planning (YuE2)**:
-  - Supports Chain-of-Thought symbolic planning (`cot="full"` for full score composition and `cot="melody"` for zero-shot cover mode).
-  - Generates human-readable and editable ABC music notation encoding key signature, meter, tempo, chords, pitch, octaves, and lyric syllables before acoustic tokenization.
-- **Native ABC Parser (`ABCParser`)**:
-  - Zero-dependency Swift parser parsing headers (`T:`, `C:`, `M:`, `L:`, `Q:`, `K:`), chord annotations (`"C"`, `"Am"`, `"G7"`), accidentals (`^`, `_`, `=`), octave markers, and hyphenated lyrics (`w:`).
+### 2.3 Symbolic Music Engine & Notation Exporters (YuE2 & mlx-Yue Key Highlights)
+- **All Five Generation Modes Supported (`vanch007/mlx-Yue` protocol)**:
+  1. **Full + Generated Score (`cot="full"`)**: Fully automated song writing, score planning, and 48kHz audio generation from text prompt & lyrics.
+  2. **Full + Supplied ABC Score (`cot="full"`)**: Compose songs conditioned on user-supplied ABC notation (melody + chords).
+  3. **Melody + Generated Score (`cot="melody"`)**: Automatic lead-sheet melody generation and vocal/melody arrangement without chord symbols.
+  4. **Melody + Supplied ABC Score (`cot="melody"`)**: Condition acoustic synthesis on an exact melody line from supplied ABC or transcribed audio reference.
+  5. **Off / Direct Generation (`cot="off"`)**: Generates music and vocals directly from style prompt and lyrics without a symbolic score.
+- **Official YuE2 Prompt Conditioning Protocol**:
+  - `EOD = 151643`, `ABC_START = 151847`, `ABC_END = 151848`, `MUSIC_START = 151851`, `MUSIC_END = 151852`.
+  - Symbolic CoT modes: `[EOD] + prompt + [ABC_START] + score + [ABC_END, MUSIC_START]`.
+  - Direct / Off mode: `[EOD] + prompt + [ABC_START, ABC_END, MUSIC_START]`.
 - **Native Standard MIDI File Exporter (`MIDIExporter`)**:
-  - Generates binary Standard MIDI Files (SMF Format 1) using Variable-Length Quantity (VLQ) delta timing:
-    - Track 1 (Conductor): Meta events for Tempo (microsec/quarter), Time Signature (num/denom), Key Signature, and Song Title.
-    - Track 2 (Melody): Note-On (0x90) and Note-Off (0x80) events with velocity 96 and 480 ticks/quarter resolution.
-    - Track 3 (Chords): Polyphonic harmonic chords (triads and 7ths) played with piano accompaniment velocity 75.
-- **MusicXML 4.0 Serializer (`MusicXMLExporter`)**:
-  - Produces standard partwise MusicXML with `<part-list>`, `<score-part>`, `<measure>`, `<attributes>`, `<direction>` sound tempo, `<harmony>` chord roots, `<note>` pitch steps and octaves, and `<lyric>` syllabic text. Fully compatible with MuseScore, Finale, Sibelius, and Dorico.
+  - Generates 100% compliant Standard MIDI Files (SMF Format 1) playable in all standard players (QuickTime Player, macOS CoreAudio DLS Synth, GarageBand, Logic Pro, VLC):
+    - **General MIDI Program Change**: Time 0 GM instruments on Channel 0 (Acoustic Grand Piano, `0xC0 0x00`) and Channel 1 (Acoustic Grand Piano, `0xC1 0x00`).
+    - **Channel CC Parameters**: CC 7 Channel Volume (127 for melody, 96 for harmony), CC 10 Pan (64 center), CC 91 Reverb Send (40).
+    - **Robust Chord Parser**: Accurately parses complex chords across all roots (`C, C#, Db, D, D#, Eb, E, F, F#, Gb, G, G#, Ab, A, A#, Bb, B`) and qualities (`Major, Minor (m), 7th, Maj7, Min7, Dim, Aug, Sus4, Sus2, 6th`).
+    - **Sustained Harmony Accompaniment**: Chords sustain across measure boundaries rather than clipping after 1/8 note.
+- **Native ABC Parser & Exporter (`ABCParser`, `AudioReferenceManager`)**:
+  - Full-song transcription without truncation caps (processes all extracted notes across arbitrarily long audio tracks).
+  - Clean 4-bar line formatting with measure barlines `|` and aligned lyrics `w:` lines according to standard ABC 2.1 specification.
 
-### 2.4 Audio Reference & Cover Song Creation Engine
-- **Audio Ingestion & Resampling (`AudioReferenceManager`)**:
-  - Ingests standard audio files (`.wav`, `.mp3`, `.m4a`, `.flac`, `.aiff`) via `AVAudioFile`.
-  - Converts and resamples any sample rate / channel layout to 16.0 kHz Mono Float32 using `AVAudioConverter`.
-- **$F_0$ Fundamental Frequency Pitch Tracking**:
-  - Leverages Apple `Accelerate` `vDSP` normalized autocorrelation across 1024-sample (~64ms) sliding analysis windows with 320-sample (20ms, 50 fps) hop sizes.
-  - Detects melodic vocal contours within human vocal range (65 Hz - 800 Hz) with parabolic peak interpolation.
-- **Krumhansl-Schmuckler Key Estimation**:
-  - Aggregates pitch class histograms ($C, C^\sharp, \dots, B$) and correlates against empirical Major and Minor tonal pitch profiles to determine the root key and mode automatically.
-- **Melody vs. Full Reference Conditioning Modes**:
-  - *Melody Only*: Extracts vocal melody contour into ABC score representation with `cot="melody"`, prompting YuE Stage 1 to preserve vocal lead while generating a completely new accompaniment style and arrangement.
-  - *Full Reference*: Ingests full audio reference, encodes into YuE Stage 1 codec tokens (`45334 ..< 46358`), and encloses them between `[start_of_reference]` and `[end_of_reference]` special tokens matching official YuE reference conditioning.
-- **Key & Modal Manipulation (`SymbolicPlanner`)**:
-  - *Pitch Transposition (`transpose(abc:semitones:)`)*: Shifts root key (`K:`), harmonic chord labels (`"C"` $\to$ `"D"`), and musical note pitches across a $\pm 12$ semitone range.
-  - *Modal Modulation (`modulateMode(abc:transform:)`)*: Transforms songs between Major and Minor (e.g. Major $\to$ Minor for melancholic covers, Minor $\to$ Major for uplifting covers) by altering scale degrees (flattening/sharpening 3rd, 6th, and 7th degrees) and chord quality.
-  - *Lyric Realignment (`rewriteLyrics(abc:newLyrics:)`)*: Strips existing syllables and re-aligns new user lyrics under reference melody note durations.
+### 2.4 Full Audio Transcription & Cover Chain (`vanch007/mlx-Yue` SheetSage2 + MERT2 Specification)
+- **Multi-Window Stitching Supporting Arbitrarily Long Source Tracks (`buildSlidingWindowPlan` & `stitchNotes`)**:
+  - Employs a sliding window plan with `window_seconds = 30.0s`, `hop_seconds = 20.0s`, and `overlap_seconds = 10.0s`.
+  - Bounded memory footprint: slices source tracks of arbitrary length (e.g., 3-minute, 5-minute, or 30-minute songs) into 30-second processing windows, preventing memory bloat.
+  - Acceptance interval: window $i$ accepts notes within $[acceptStart, acceptEnd]$, where seam notes are joined across adjacent windows using `stitchNotes(windowsNotes:maxGapSeconds:)` with a 60ms gap/overlap tolerance and pitch continuity check.
+- **Tri-Format Audio Transcription Export**:
+  - **ABC Score (`.abc`)**: Full song transcription without note truncation caps, formatted with standard 4-bar line wrapping, key signature estimation, and aligned lyrics.
+  - **Playable Standard MIDI File (`.mid`)**: SMF Format 1 with General MIDI Program Change 0 (Acoustic Grand Piano), CC 7 Volume, CC 10 Center Pan, and sustained chord accompaniment.
+  - **SheetSage2 / MERT2 Timing Labels (`.lab`)**: Standard tab-delimited timing label format (`<start_time>\t<end_time>\t<label>`):
+    - `notes.lab`: `<startTime>\t<endTime>\t<NoteName><Octave>` (e.g., `0.000\t0.500\tC4`).
+    - `chords.lab`: `<startTime>\t<endTime>\t<ChordName>` (e.g., `0.000\t2.000\tC:maj`).
+    - `structure.lab`: `<startTime>\t<endTime>\t<Section>` (e.g., `0.000\t15.000\tintro`).
+  - **1-Click Bundle Exporter**: Exports `.abc`, `.mid`, `_notes.lab`, `_chords.lab`, and `_structure.lab` in a single folder export action.
+- **End-to-End Cover Pipeline (`prepareCoverPipeline(targetGenre:)`)**:
+  - **1-Click Priming**: Transcribes source audio $\to$ extracts melody and harmonic structure $\to$ sets generation mode to `melodySupplied` (or `fullSupplied`) $\to$ locks the transcribed ABC score into the conditioning prompt.
+  - **Target Style Morphing Presets**: Instant 1-click genre morphing buttons (80s Synthwave, Acoustic Folk, Cyberpunk EDM, Lo-Fi Jazz Pop, Modern Rock Anthem) while preserving the authentic vocal lead and melody contour.
+  - **Key & Modal Modulation**:
+    - *Pitch Transposition (`transpose(abc:semitones:)`)*: $\pm 12$ semitone shift across notes, chords, and key signature.
+    - *Modal Transformation (`modulateMode(abc:transform:)`)*: Major $\leftrightarrow$ Minor modulation (flattening/sharpening 3rd, 6th, and 7th scale degrees and chord qualities).
+    - *Lyric Realignment (`rewriteLyrics(abc:newLyrics:)`)*: Adapts new cover lyrics onto the transcribed melody.
 
 ### 2.5 Audio Subsystem
 - **AVAudioEngine & AVAudioPlayerNode**: Low-latency native playback, dynamic format negotiation, and sample rate conversion.
@@ -79,8 +90,7 @@ YuE Native macOS Studio is a 100% native Apple Silicon desktop application for m
 - **Storage**: Thread-safe SQLite3 database (`storage.sqlite3`).
 - **No Hardcoded Data**: All user settings, generation history, presets, and model registry are queried dynamically.
 - **State Management**: SwiftUI `@Observable` / `ObservableObject` architecture (`AppState`).
-
-- **Build Number**: `2026092101` (Current date + sequence number).
+- **Build Number**: `2026092201` (Current date + sequence number).
 - **Target Platform**: macOS 14.0+ (Apple Silicon M1/M2/M3/M4)  
 - **Display**: Fixed footer bar in the main application window showing build number and real-time unified memory consumption.
 - **Top-P (Nucleus) Acoustic Filtering**: Rejects improbable acoustic codes in the tail of the distribution, eliminating vocal rasps, static, and phase noise.

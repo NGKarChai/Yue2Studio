@@ -53,6 +53,20 @@ public struct ScoreEditorView: View {
                     } label: {
                         Label("Export ABC Score (.abc)", systemImage: "arrow.down.doc")
                     }
+
+                    Button {
+                        exportLAB()
+                    } label: {
+                        Label("Export Timing Labels (.lab)", systemImage: "clock")
+                    }
+
+                    Divider()
+
+                    Button {
+                        exportBundle()
+                    } label: {
+                        Label("Export Complete Bundle (ABC + MIDI + LAB)", systemImage: "archivebox")
+                    }
                 } label: {
                     Label("Export Notes", systemImage: "square.and.arrow.up")
                 }
@@ -155,6 +169,7 @@ public struct ScoreEditorView: View {
                     }
                     .padding(4)
                 }
+                .frame(minWidth: 0, maxWidth: .infinity)
                 .frame(minHeight: 140, maxHeight: 180)
             } else {
                 // Monospace ABC Notation Editor
@@ -186,20 +201,35 @@ public struct ScoreEditorView: View {
 
     // MARK: - Export Handlers
 
+    private func getEffectiveScore() -> String {
+        let trimmed = self.state.currentScore.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            let generated = self.state.symbolicPlanner.generateStarterTemplate(
+                title: self.state.songTitle,
+                genreTags: self.state.genreTags,
+                lyrics: self.state.lyrics
+            )
+            self.state.currentScore = generated
+            return generated
+        }
+        return self.state.currentScore
+    }
+
     private func exportMIDI() {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.midi]
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
         panel.title = "Export MIDI File"
-        panel.nameFieldStringValue = "melody_\(Int(Date().timeIntervalSince1970)).mid"
+        panel.nameFieldStringValue = "\(state.songTitle.replacingOccurrences(of: " ", with: "_")).mid"
 
         panel.begin { response in
             guard response == .OK, let targetURL = panel.url else { return }
-            let midiData = self.midiExporter.export(score: self.parser.parse(abcString: self.state.currentScore))
+            let scoreStr = self.getEffectiveScore()
+            let midiData = self.midiExporter.export(score: self.parser.parse(abcString: scoreStr))
             do {
                 try midiData.write(to: targetURL)
-                self.exportStatusMessage = "Successfully exported MIDI file to:\n\(targetURL.path)"
+                self.exportStatusMessage = "Successfully exported standard playable MIDI file to:\n\(targetURL.path)"
                 self.showingStatusAlert = true
             } catch {
                 self.exportStatusMessage = "Failed to export MIDI: \(error.localizedDescription)"
@@ -214,11 +244,12 @@ public struct ScoreEditorView: View {
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
         panel.title = "Export MusicXML Sheet Music"
-        panel.nameFieldStringValue = "score_\(Int(Date().timeIntervalSince1970)).musicxml"
+        panel.nameFieldStringValue = "\(state.songTitle.replacingOccurrences(of: " ", with: "_")).musicxml"
 
         panel.begin { response in
             guard response == .OK, let targetURL = panel.url else { return }
-            let xmlString = self.xmlExporter.export(score: self.parser.parse(abcString: self.state.currentScore))
+            let scoreStr = self.getEffectiveScore()
+            let xmlString = self.xmlExporter.export(score: self.parser.parse(abcString: scoreStr))
             do {
                 try xmlString.write(to: targetURL, atomically: true, encoding: .utf8)
                 self.exportStatusMessage = "Successfully exported MusicXML score to:\n\(targetURL.path)"
@@ -236,16 +267,78 @@ public struct ScoreEditorView: View {
         panel.canCreateDirectories = true
         panel.isExtensionHidden = false
         panel.title = "Export ABC Score"
-        panel.nameFieldStringValue = "score_\(Int(Date().timeIntervalSince1970)).abc"
+        panel.nameFieldStringValue = "\(state.songTitle.replacingOccurrences(of: " ", with: "_")).abc"
 
         panel.begin { response in
             guard response == .OK, let targetURL = panel.url else { return }
+            let scoreStr = self.getEffectiveScore()
             do {
-                try self.state.currentScore.write(to: targetURL, atomically: true, encoding: .utf8)
-                self.exportStatusMessage = "Successfully exported ABC score to:\n\(targetURL.path)"
+                try scoreStr.write(to: targetURL, atomically: true, encoding: .utf8)
+                self.exportStatusMessage = "Successfully exported complete ABC score to:\n\(targetURL.path)"
                 self.showingStatusAlert = true
             } catch {
                 self.exportStatusMessage = "Failed to export ABC: \(error.localizedDescription)"
+                self.showingStatusAlert = true
+            }
+        }
+    }
+
+    private func exportLAB() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.title = "Export Timing Labels (.lab)"
+        panel.nameFieldStringValue = "\(state.songTitle.replacingOccurrences(of: " ", with: "_")).lab"
+
+        panel.begin { response in
+            guard response == .OK, let targetURL = panel.url else { return }
+            let scoreStr = self.getEffectiveScore()
+            let parsedScore = self.parser.parse(abcString: scoreStr)
+            var lines: [String] = []
+            var t = 0.0
+            for measure in parsedScore.measures {
+                for note in measure.notes {
+                    let durSec = (note.durationBeats / (max(20.0, parsedScore.tempoBpm) / 60.0))
+                    if let pitch = note.pitch {
+                        let noteName = "\(pitch.step)\(pitch.alter == 1 ? "#" : (pitch.alter == -1 ? "b" : ""))"
+                        lines.append(String(format: "%.3f\t%.3f\t%@%d", t, t + durSec, noteName, pitch.octave))
+                    }
+                    t += durSec
+                }
+            }
+            let labStr = lines.joined(separator: "\n")
+            do {
+                try labStr.write(to: targetURL, atomically: true, encoding: .utf8)
+                self.exportStatusMessage = "Successfully exported timing labels (.lab) to:\n\(targetURL.path)"
+                self.showingStatusAlert = true
+            } catch {
+                self.exportStatusMessage = "Failed to export LAB: \(error.localizedDescription)"
+                self.showingStatusAlert = true
+            }
+        }
+    }
+
+    private func exportBundle() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Destination Directory for Transcription Bundle"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        panel.begin { response in
+            guard response == .OK, let targetDir = panel.url else { return }
+            do {
+                let exported = try self.state.exportTranscriptionBundle(
+                    directory: targetDir,
+                    baseName: self.state.songTitle
+                )
+                let filesList = exported.map { $0.lastPathComponent }.joined(separator: ", ")
+                self.exportStatusMessage = "Successfully exported transcription bundle (\(filesList)) to:\n\(targetDir.path)"
+                self.showingStatusAlert = true
+            } catch {
+                self.exportStatusMessage = "Failed to export bundle: \(error.localizedDescription)"
                 self.showingStatusAlert = true
             }
         }

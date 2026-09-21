@@ -1,21 +1,63 @@
 import Foundation
 
-/// Planning mode for YuE2 composition pipeline
+/// Planning mode for YuE2 composition pipeline matching official vanch007/mlx-Yue specification
 public enum PlanningMode: String, CaseIterable, Identifiable, Sendable {
-    case fullPlan = "Symbolic Plan (Full Score)"
-    case melodyCover = "Zero-Shot Cover"
-    case directAudio = "Direct Audio (Fast)"
+    case fullGenerated = "Full + Generated Score"
+    case fullSupplied = "Full + Supplied ABC Score"
+    case melodyGenerated = "Melody + Generated Score"
+    case melodySupplied = "Melody + Supplied ABC Score"
+    case direct = "Off (Direct Generation)"
+
+    // Backward compatibility aliases
+    public static var fullPlan: PlanningMode { .fullGenerated }
+    public static var melodyCover: PlanningMode { .melodySupplied }
+    public static var directAudio: PlanningMode { .direct }
 
     public var id: String { rawValue }
 
+    /// Chain-of-Thought mode: "full", "melody", or "off"
+    public var cot: String {
+        switch self {
+        case .fullGenerated, .fullSupplied:
+            return "full"
+        case .melodyGenerated, .melodySupplied:
+            return "melody"
+        case .direct:
+            return "off"
+        }
+    }
+
+    /// Whether this mode conditions generation on user-supplied or transcribed ABC score
+    public var isSupplied: Bool {
+        return self == .fullSupplied || self == .melodySupplied
+    }
+
+    /// Official YuE2 prompt instruction directive
+    public var instruction: String {
+        switch cot {
+        case "off":
+            return "Generate music with codec tokens from the given conditions."
+        case "melody":
+            return "Generate a melody-only ABC transcription without chord symbols, then generate music with codec tokens from the given conditions."
+        case "full":
+            return "Generate a chord-annotated ABC transcription, then generate music with codec tokens from the given conditions."
+        default:
+            return "Generate music with codec tokens from the given conditions."
+        }
+    }
+
     public var description: String {
         switch self {
-        case .fullPlan:
-            return "Plans melody, chord progression, and rhythm in ABC notation before audio rendering."
-        case .melodyCover:
-            return "Uses your custom melody / ABC score to arrange and sing a cover in the selected genre."
-        case .directAudio:
-            return "Bypasses symbolic planning and generates acoustic audio directly."
+        case .fullGenerated:
+            return "Fully automated song writing, score planning, and 48kHz audio generation from text prompt & lyrics."
+        case .fullSupplied:
+            return "Compose songs conditioned on user-supplied ABC notation (melody + chords)."
+        case .melodyGenerated:
+            return "Automatic lead-sheet melody generation and vocal/melody arrangement."
+        case .melodySupplied:
+            return "Condition acoustic synthesis on an exact melody line from your supplied ABC score or transcribed audio."
+        case .direct:
+            return "Generate music directly from style and lyrics without a symbolic score (includes vocals)."
         }
     }
 }
@@ -32,17 +74,9 @@ public final class SymbolicPlanner: @unchecked Sendable {
         self.xmlExporter = MusicXMLExporter()
     }
 
-    /// Formats prompt for Symbolic Planning Chain-of-Thought
+    /// Formats prompt for Symbolic Planning according to official YuE2 specification
     public func formatPlanningPrompt(genreTags: String, lyrics: String, mode: PlanningMode) -> String {
-        let cotDirective = (mode == .melodyCover) ? "cot=\"melody\"" : "cot=\"full\""
-        return """
-        [System: YuE2 Music Symbolic Planner (\(cotDirective))]
-        Plan musical composition in standard ABC notation including Key, Meter, Tempo, Chords, Notes, and Lyrical alignment.
-        [Genre & Style]: \(genreTags)
-        [Lyrics]:
-        \(lyrics)
-        [Score Plan]:
-        """
+        return "\(mode.instruction)\n[Tags]\n\(genreTags)\n[Lyrics]\n\(lyrics)\n"
     }
 
     /// Extracts ABC notation block from model generation output
@@ -55,6 +89,22 @@ public final class SymbolicPlanner: @unchecked Sendable {
             return "X: 1\n" + String(text[tIdx...])
         }
         return text
+    }
+
+    /// Extracts structure/section tags like [intro], [verse], [chorus] from lyrics
+    public func extractStructureTags(lyrics: String) -> [String] {
+        let lines = lyrics.components(separatedBy: .newlines)
+        var tags: [String] = []
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("[") && trimmed.hasSuffix("]") {
+                let tag = String(trimmed.dropFirst().dropLast()).trimmingCharacters(in: .whitespaces)
+                if !tag.isEmpty {
+                    tags.append(tag)
+                }
+            }
+        }
+        return tags
     }
 
     /// Parses an ABC string into structured ABCScore
@@ -74,7 +124,7 @@ public final class SymbolicPlanner: @unchecked Sendable {
         return xmlExporter.export(score: score)
     }
 
-    /// Generates a starter template ABC score tailored to genre tags and lyrics
+    /// Generates a starter template ABC score tailored to genre tags and entire lyrics structure
     public func generateStarterTemplate(title: String, genreTags: String, lyrics: String) -> String {
         let isMinor = genreTags.lowercased().contains("minor") || genreTags.lowercased().contains("sad") || genreTags.lowercased().contains("dark")
         let key = isMinor ? "Am" : "C"
@@ -93,20 +143,52 @@ public final class SymbolicPlanner: @unchecked Sendable {
         let lyricLines = lyrics
             .components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty && !$0.hasPrefix("[") }
+            .filter { !$0.isEmpty }
 
-        if !lyricLines.isEmpty {
-            for (idx, l) in lyricLines.prefix(4).enumerated() {
-                let c1 = chords[(idx * 2) % chords.count]
-                let c2 = chords[(idx * 2 + 1) % chords.count]
-                let notesLine = "\"\(c1)\" c2 e2 g2 c2 | \"\(c2)\" d2 f2 a2 d2 |"
-                let syllables = l.components(separatedBy: .whitespaces).joined(separator: "-")
-                lines.append(notesLine)
-                lines.append("w: \(syllables) |")
+        var barCount = 0
+        var currentBars: [String] = []
+        var currentLyrics: [String] = []
+
+        for line in lyricLines {
+            if line.hasPrefix("[") && line.hasSuffix("]") {
+                if !currentBars.isEmpty {
+                    lines.append(currentBars.joined(separator: " ") + " |")
+                    lines.append("w: " + currentLyrics.joined(separator: " | ") + " |")
+                    currentBars.removeAll()
+                    currentLyrics.removeAll()
+                }
+                let secName = line.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
+                lines.append("% " + secName)
+                continue
             }
-        } else {
-            lines.append("\"\(chords[0])\" c2 e2 g2 c2 | \"\(chords[1])\" d2 f2 a2 d2 |")
-            lines.append("\"\(chords[2])\" e2 g2 b2 e2 | \"\(chords[3])\" f2 a2 c'2 f2 |")
+
+            let c1 = chords[(barCount * 2) % chords.count]
+            let c2 = chords[(barCount * 2 + 1) % chords.count]
+            let m1 = "\"\(c1)\" c2 e2 g2 c2"
+            let m2 = "\"\(c2)\" d2 f2 a2 d2"
+            let syllables = line.components(separatedBy: .whitespaces).joined(separator: "-")
+
+            currentBars.append("| \(m1) | \(m2)")
+            currentLyrics.append("\(syllables)")
+            barCount += 1
+
+            // Wrap every 2 lines (4 measures) into standard ABC line
+            if currentBars.count >= 2 {
+                lines.append(currentBars.joined(separator: " ") + " |")
+                lines.append("w: " + currentLyrics.joined(separator: " | ") + " |")
+                currentBars.removeAll()
+                currentLyrics.removeAll()
+            }
+        }
+
+        if !currentBars.isEmpty {
+            lines.append(currentBars.joined(separator: " ") + " |")
+            lines.append("w: " + currentLyrics.joined(separator: " | ") + " |")
+        }
+
+        if barCount == 0 {
+            lines.append("| \"\(chords[0])\" c2 e2 g2 c2 | \"\(chords[1])\" d2 f2 a2 d2 |")
+            lines.append("| \"\(chords[2])\" e2 g2 b2 e2 | \"\(chords[3])\" f2 a2 c'2 f2 |")
         }
 
         return lines.joined(separator: "\n")

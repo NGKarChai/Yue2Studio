@@ -64,7 +64,10 @@ public struct CoverStudioView: View {
                                 Text("• Key: \(analysis.detectedKey)")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
-                                Text("• \(analysis.notes.count) notes tracked")
+                                Text("• \(analysis.notes.count) notes")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text("• \(analysis.windowCount) window\(analysis.windowCount > 1 ? "s" : "")")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
@@ -228,6 +231,65 @@ public struct CoverStudioView: View {
                 .controlSize(.small)
             }
             .padding(.top, 2)
+
+            Divider()
+
+            // End-to-End Cover Pipeline
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label("End-to-End Cover Pipeline", systemImage: "sparkles.rectangle.stack.fill")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.blue)
+
+                    Spacer()
+
+                    Button(action: {
+                        exportBundle()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "arrow.down.doc")
+                            Text("Export Bundle (ABC + MIDI + LAB)")
+                        }
+                        .font(.caption2)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+
+                Text("Transcribe source audio ➔ Extract melody & structure ➔ Re-synthesize with new styles")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+
+                HStack(spacing: 8) {
+                    Button(action: {
+                        appState.prepareCoverPipeline()
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "bolt.fill")
+                            Text("Prime 1-Click Cover Pipeline")
+                        }
+                        .font(.caption.bold())
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                }
+
+                // Quick Style Morphing Presets
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Re-synthesize with Target Style:")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary)
+
+                    HStack(spacing: 6) {
+                        CoverGenreChip(title: "80s Synthwave", genre: "80s synthwave, retro analog synth, driving linndrum, neon pads, female vocal, 124 bpm", appState: appState)
+                        CoverGenreChip(title: "Acoustic Folk", genre: "acoustic folk, fingerpicked warm guitar, soft strings, intimate vocal, authentic warmth, 110 bpm", appState: appState)
+                        CoverGenreChip(title: "Cyberpunk EDM", genre: "cyberpunk edm, aggressive bass drop, massive saw synths, sidechained four-on-the-floor, energetic vocal, 128 bpm", appState: appState)
+                        CoverGenreChip(title: "Lo-Fi Jazz Pop", genre: "lo-fi jazz pop, mellow rhodes piano, vinyl crackle, gentle drums, relaxed soulful vocal, 85 bpm", appState: appState)
+                        CoverGenreChip(title: "Rock Anthem", genre: "modern rock anthem, distorted electric guitars, powerful live drums, soaring passionate vocal, stadium energy, 130 bpm", appState: appState)
+                    }
+                }
+            }
         }
         .padding(12)
         .background(Color(NSColor.windowBackgroundColor).opacity(0.6))
@@ -236,6 +298,26 @@ public struct CoverStudioView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color(NSColor.separatorColor), lineWidth: 1)
         )
+    }
+
+    private func exportBundle() {
+        let panel = NSOpenPanel()
+        panel.title = "Choose Destination Directory for Transcription Bundle"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        if panel.runModal() == .OK, let targetDir = panel.url {
+            do {
+                _ = try appState.exportTranscriptionBundle(
+                    directory: targetDir,
+                    baseName: appState.referenceAudioName ?? appState.songTitle
+                )
+            } catch {
+                print("[CoverStudioView] Bundle export failed: \(error)")
+            }
+        }
     }
 
     private func chooseReferenceAudio() {
@@ -255,5 +337,22 @@ public struct CoverStudioView: View {
         if panel.runModal() == .OK, let url = panel.url {
             appState.loadReferenceAudio(url: url)
         }
+    }
+}
+
+private struct CoverGenreChip: View {
+    let title: String
+    let genre: String
+    let appState: AppState
+
+    var body: some View {
+        Button(action: {
+            appState.prepareCoverPipeline(targetGenre: genre)
+        }) {
+            Text(title)
+                .font(.system(size: 10))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.mini)
     }
 }
