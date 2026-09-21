@@ -1,0 +1,71 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon\r
+._*
+.Spotlight-V100
+.Trashes
+
+# Swift / Xcode
+.build/
+.swiftpm/
+Packages/
+xcuserdata/
+DerivedData/
+*.xcodeproj
+*.xcworkspace
+
+# App Bundles & Local Root Metallibs
+Yue2Studio.app/
+/default.metallib
+/mlx.metallib
+
+# Heavy Model Weights (downloaded dynamically or stored separately)
+Models/
+
+# Generated Audio Outputs
+Generations/*
+!Generations/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Python Virtual Environments
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+YuePythonStudio/.venv/
+
+# Editor & IDE
+.idea/
+.vscode/
+*.swp
+*~

@@ -1,0 +1,83 @@
+# PROJECT SPECIFICATION & PROMPT: NATIVE MACOS APP PORT OF YUE MUSIC GENERATION (ZERO-PYTHON RUNTIME)
+
+## 1. PROJECT OBJECTIVE
+Build a high-performance, standalone, native macOS application (macOS 14+ Sonoma / macOS 15+ Sequoia) that executes the complete YuE full-song music generation pipeline (Stage 1 LLM, Stage 2 LLM, and X-Codec vocoder) with ZERO Python runtime or external system Python dependencies. All inference, model orchestration, UI, and audio rendering must execute via native Apple Silicon frameworks (Swift, MLX Swift / C++ bridging, Metal, Core ML, and AVFoundation).
+
+Reference Repository:
+- GitHub: https://github.com/multimodal-art-projection/YuE
+- Architecture: Two-stage autoregressive language models + Neural Audio Codec (X-Codec)
+
+---
+
+## 2. ARCHITECTURAL REQUIREMENTS
+
+### 2.1 Backend / Inference Architecture (No Python)
+1. **Stage 1 (Coarse Token Generation):**
+   - Implemented via MLX Swift or llama.cpp / GGML C++ bridged to Swift.
+   - Handles lyric prompt conditioning, genre tag embedding, and multi-track autoregressive token sampling (vocal + instrumental streams).
+   - Dynamic KV caching and Metal Performance Shaders (MPS) memory allocation.
+
+2. **Stage 2 (Acoustic Detail Refinement):**
+   - Bridges coarse codebook tokens to fine-grained multi-level acoustic codebook tokens.
+   - Continuous context window sliding and segment-by-segment generation.
+
+3. **Stage 3 (Audio Reconstruction / Neural Audio Codec - X-Codec):**
+   - Port the X-Codec decoder architecture to Core ML (.mlpackage) or native MLX/Metal shader graph.
+   - Input: Discrete multi-codebook token tensors.
+   - Output: 44.1 kHz / 24-bit floating-point raw PCM audio buffer.
+
+4. **Audio Subsystem:**
+   - Real-time streaming playback via AVAudioEngine / AVPlayer.
+   - Direct export to WAV / FLAC / AAC container formats using AVAssetWriter or AudioToolbox ExtAudioFile.
+
+### 2.2 Frontend & UI (SwiftUI)
+- Modern macOS native user interface using SwiftUI.
+- Sections:
+  * **Prompt & Lyrics Editor:** Dual text inputs for Genre/Style Tags and Structured Lyrics (with [verse], [chorus], [bridge] markers).
+  * **Inference Parameters Panel:** Sliders/pickers for Temperature, Top-p, Classifier-Free Guidance (CFG) scale, Max Tokens, Seed, and Quantization precision (4-bit, 8-bit, 16-bit).
+  * **Model Manager / Downloader:** Integrated background download manager for model weights with SHA-256 verification and local directory selection.
+  * **Generation Monitor:** Real-time generation progress (token count, tokens/sec, phase indicators for Stage 1, Stage 2, Decoding).
+  * **Audio Player & Waveform Visualizer:** Native waveform rendering, playback scrubber, volume control, and one-click export.
+
+---
+
+## 3. SCOPE OF WORK FOR ANTIGRAVITY AGENT
+
+Please generate the complete codebase and project assets following these modules:
+
+### Module 1: Xcode Project Scaffolding & Configuration
+- Create project structure for a SwiftUI macOS App (`YuEMacNative`).
+- Setup Swift Package Manager (`Package.swift` or target dependencies) integrating:
+  * `ml-explore/mlx-swift` (or C++ bridging headers for `llama.cpp` / GGML).
+  * Apple Accelerate and AVFoundation frameworks.
+- Setup Sandbox entitlements with file-access bookmarks for local model weight storage.
+
+### Module 2: Model Conversion & Weight Loading Specifications
+- Provide instructions and Swift loaders for reading converted GGUF / SafeTensors / Core ML artifacts.
+- Implement tokenizers (BPE / SentencePiece) in pure Swift/C++.
+- Define data structures for audio tokens, latent representations, and sampling parameters.
+
+### Module 3: Native Pipeline Orchestrator (`YuEPipeline.swift`)
+- Implement `YuEPipeline` coordinating:
+  * Tokenizing genre prompts and structured lyrics.
+  * Autoregressive decoding loop for Stage 1.
+  * Codebook expansion in Stage 2.
+  * Neural codec decoding via Core ML / MLX to raw PCM audio.
+- Ensure all loops run asynchronously on background DispatchQueues / Swift Concurrency (`async`/`await`) to keep UI at 60/120 FPS.
+
+### Module 4: Core ML / MLX X-Codec Decoder Integration
+- Implement the model wrapper class `XCodecDecoder.swift`.
+- Efficiently convert output tensors to `AVAudioPCMBuffer` without unnecessary memory copies.
+
+### Module 5: SwiftUI User Interface & State Management
+- `ContentView.swift`: Main dashboard layout with sidebar navigation.
+- `GenerationView.swift`: Lyric prompt inputs, style inputs, inference controls.
+- `WaveformPlayerView.swift`: Native Metal- or Canvas-based interactive audio player.
+- `AppState.swift`: Observable state holding current model status, generation progress, and active audio buffer.
+
+---
+
+## 4. CONSTRAINTS & NON-FUNCTIONAL REQUIREMENTS
+- **Zero Python Runtime:** Do NOT embed Python frameworks, PyRun, PyTorch C++ (LibTorch with python hooks), or system shell calls to python3.
+- **Hardware Optimization:** Leverage Unified Memory architecture on Apple Silicon (M-series chips). Minimize duplicate allocations.
+- **Error Handling:** Graceful out-of-memory handling, invalid token handling, and interrupted generation recovery.

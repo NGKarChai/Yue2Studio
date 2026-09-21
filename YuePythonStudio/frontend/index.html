@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YuE Python Studio - Music Generation</title>
+    <link rel="stylesheet" href="/static/css/yue_style.css">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <aside id="yue_sidebar">
+        <div class="yue_brand">
+            <div class="yue_brand_icon">🎼</div>
+            <div class="yue_brand_title">YuE Studio Py</div>
+        </div>
+
+        <ul class="yue_nav_list">
+            <li class="yue_nav_item yue_active" data-tab="yue_tab_studio" id="yue_nav_studio">
+                <span>🎹</span> <span>Studio</span>
+            </li>
+            <li class="yue_nav_item" data-tab="yue_tab_cover" id="yue_nav_cover">
+                <span>🎙️</span> <span>Cover & Audio Ref</span>
+            </li>
+            <li class="yue_nav_item" data-tab="yue_tab_score" id="yue_nav_score">
+                <span>📜</span> <span>Symbolic Score</span>
+                <span id="yue_score_ready_badge" style="display: none; background-color: var(--yue-success); color: #fff; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: auto;">Ready</span>
+            </li>
+            <li class="yue_nav_item" data-tab="yue_tab_library" id="yue_nav_library">
+                <span>📚</span> <span>Library</span>
+            </li>
+            <li class="yue_nav_item" data-tab="yue_tab_models" id="yue_nav_models">
+                <span>🧠</span> <span>Models</span>
+            </li>
+            <li class="yue_nav_item" data-tab="yue_tab_settings" id="yue_nav_settings">
+                <span>⚙️</span> <span>Settings</span>
+            </li>
+        </ul>
+    </aside>
+
+    <!-- Main Container -->
+    <main id="yue_main_container">
+        <!-- Top Sticky Header -->
+        <header id="yue_header">
+            <h2 style="font-size: 16px; font-weight: 600;" id="yue_header_title">Music Generation Studio</h2>
+            <div class="yue_header_badges">
+                <div class="yue_badge" id="yue_header_device_badge">⚡ Loading device...</div>
+                <div class="yue_badge" id="yue_header_ram_badge">💾 RAM: ...</div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div id="yue_content">
+            <!-- TAB 1: STUDIO -->
+            <div class="yue_tab_pane yue_active" id="yue_tab_studio">
+                <div class="yue_grid_2col">
+                    <!-- Left: Prompt & Lyrics -->
+                    <div class="yue_card">
+                        <div class="yue_card_title"><span>📝</span> Song Setup</div>
+                        
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_song_title_input">Song Title</label>
+                            <input type="text" class="yue_input" id="yue_song_title_input" value="Midnight Echoes">
+                        </div>
+
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_genre_input">Genre & Style Tags</label>
+                            <input type="text" class="yue_input" id="yue_genre_input" placeholder="e.g. female vocal, modern pop, uplifting melody, synth chords, punchy drums, 120 bpm">
+                            <div class="yue_chips_container" id="yue_genre_presets_container"></div>
+                        </div>
+
+                        <div class="yue_form_group">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                <label class="yue_label" style="margin-bottom: 0;" for="yue_lyrics_textarea">Structured Lyrics (Section Tags: [verse], [chorus], [bridge])</label>
+                                <select class="yue_select" style="width: auto; padding: 4px 8px; font-size: 11px;" id="yue_lyrics_presets_select"></select>
+                            </div>
+                            <textarea class="yue_textarea" id="yue_lyrics_textarea" rows="12" placeholder="[verse]&#10;Waking up under morning light&#10;Chasing shadows into the night&#10;&#10;[chorus]&#10;Hear the music rising high&#10;Painting colors in the sky"></textarea>
+                        </div>
+                    </div>
+
+                    <!-- Right: Parameters & Controls -->
+                    <div class="yue_card">
+                        <div class="yue_card_title"><span>🎛️</span> Inference Parameters</div>
+
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_param_temp">Temperature: <span id="yue_param_temp_val" class="yue_slider_val">0.9</span></label>
+                            <div class="yue_slider_row">
+                                <input type="range" class="yue_slider" id="yue_param_temp" min="0.1" max="1.5" step="0.05" value="0.9" oninput="document.getElementById('yue_param_temp_val').textContent = this.value">
+                            </div>
+                        </div>
+
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_param_topp">Top-P (Nucleus Sampling): <span id="yue_param_topp_val" class="yue_slider_val">0.95</span></label>
+                            <div class="yue_slider_row">
+                                <input type="range" class="yue_slider" id="yue_param_topp" min="0.5" max="1.0" step="0.01" value="0.95" oninput="document.getElementById('yue_param_topp_val').textContent = this.value">
+                            </div>
+                        </div>
+
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_param_cfg">CFG Guidance Scale: <span id="yue_param_cfg_val" class="yue_slider_val">1.5</span></label>
+                            <div class="yue_slider_row">
+                                <input type="range" class="yue_slider" id="yue_param_cfg" min="1.0" max="3.0" step="0.1" value="1.5" oninput="document.getElementById('yue_param_cfg_val').textContent = this.value">
+                            </div>
+                        </div>
+
+                        <div class="yue_form_group">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <label class="yue_label" for="yue_param_seconds">Target Song Duration: <span id="yue_param_seconds_val" class="yue_slider_val">60s (1m 00s)</span></label>
+                                <span style="font-size: 11px; color: var(--yue-text-muted);" id="yue_param_tokens_hint">(~6,000 tokens)</span>
+                            </div>
+                            <div class="yue_slider_row">
+                                <input type="range" class="yue_slider" id="yue_param_seconds" min="10" max="300" step="5" value="60" oninput="window.yue_updateDurationDisplay(this.value)">
+                            </div>
+                            <div class="yue_chips_container" style="margin-top: 6px;">
+                                <div class="yue_chip" onclick="window.yue_setDuration(30)">30s</div>
+                                <div class="yue_chip" onclick="window.yue_setDuration(60)">1m (60s)</div>
+                                <div class="yue_chip" onclick="window.yue_setDuration(120)">2m (120s)</div>
+                                <div class="yue_chip" onclick="window.yue_setDuration(180)">3m (180s - Full Song)</div>
+                                <div class="yue_chip" onclick="window.yue_setDuration(240)">4m (240s)</div>
+                                <div class="yue_chip" onclick="window.yue_setDuration(300)">5m (300s)</div>
+                            </div>
+                        </div>
+
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_param_quality">Stage 2 Refinement Quality</label>
+                            <select class="yue_select" id="yue_param_quality">
+                                <option value="draft">🚀 Draft (Instant Codebook 0 Direct Audio)</option>
+                                <option value="balanced" selected>⚡ Balanced (~5x Faster, Codebooks 1..3)</option>
+                                <option value="full">💎 Studio Master (Full 7 Codebook Refinement)</option>
+                            </select>
+                        </div>
+
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_param_width">Stereo Width: <span id="yue_param_width_val" class="yue_slider_val">0.5</span></label>
+                            <div class="yue_slider_row">
+                                <input type="range" class="yue_slider" id="yue_param_width" min="0.0" max="1.0" step="0.05" value="0.5" oninput="document.getElementById('yue_param_width_val').textContent = this.value">
+                            </div>
+                        </div>
+
+                        <div class="yue_form_group" style="display: flex; gap: 20px; align-items: center;">
+                            <label style="display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer;">
+                                <input type="checkbox" id="yue_param_mastering" checked>
+                                Anti-Clipping Soft-Knee Limiter (-2.0 dBFS)
+                            </label>
+                        </div>
+
+                        <div class="yue_form_group">
+                            <label class="yue_label" for="yue_param_cot_mode">Symbolic Planning Mode</label>
+                            <select class="yue_select" id="yue_param_cot_mode">
+                                <option value="off" selected>Direct Audio (cot="off")</option>
+                                <option value="full">Symbolic Plan - Full Score (cot="full")</option>
+                                <option value="melody">Melody Lead Cover (cot="melody")</option>
+                            </select>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; margin-top: 20px;">
+                            <button class="yue_btn yue_btn_primary" id="yue_btn_generate" style="flex: 1; justify-content: center;">
+                                <span>⚡</span> Generate Song
+                            </button>
+                            <button class="yue_btn yue_btn_danger" id="yue_btn_cancel" style="display: none;">
+                                <span>⏹</span> Stop
+                            </button>
+                        </div>
+
+                        <!-- Progress Box -->
+                        <div class="yue_progress_box" id="yue_progress_box">
+                            <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 600;">
+                                <span id="yue_progress_phase">Processing...</span>
+                                <span id="yue_progress_percent"></span>
+                            </div>
+                            <div class="yue_progress_track">
+                                <div class="yue_progress_fill" id="yue_progress_fill"></div>
+                            </div>
+                            <div style="font-size: 11px; color: var(--yue-text-muted);" id="yue_progress_msg">Preparing pipeline...</div>
+                            <div id="yue_score_notification" style="display: none; margin-top: 10px; padding: 8px 12px; background-color: rgba(16, 185, 129, 0.15); border: 1px solid var(--yue-success); border-radius: 6px; font-size: 12px; color: #34d399;">
+                                🎼 Note sheet generated! <a href="#" id="yue_link_view_notes" style="color: #67e8f9; text-decoration: underline; font-weight: 600;">View Sheet Music & Export MIDI/MusicXML →</a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: COVER & AUDIO REF -->
+            <div class="yue_tab_pane" id="yue_tab_cover">
+                <div class="yue_card">
+                    <div class="yue_card_title"><span>🎙️</span> Reference Audio Track & Pitch Tracker</div>
+                    
+                    <input type="file" id="yue_cover_file_input" style="display: none;" accept="audio/*">
+                    <div id="yue_cover_upload_box" style="border: 2px dashed var(--yue-border); border-radius: var(--yue-radius); padding: 30px; text-align: center; cursor: pointer; background-color: var(--yue-bg-elevated); margin-bottom: 20px;">
+                        <span>Drop reference audio here (.wav, .mp3, .flac) or click to upload</span>
+                    </div>
+
+                    <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+                        <div class="yue_badge" id="yue_cover_key_badge">Key: --</div>
+                        <div class="yue_badge" id="yue_cover_bpm_badge">BPM: --</div>
+                    </div>
+
+                    <div style="height: 120px; background-color: var(--yue-bg-elevated); border: 1px solid var(--yue-border); border-radius: 8px; margin-bottom: 20px; overflow: hidden;">
+                        <canvas id="yue_pitch_canvas" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+
+                    <div class="yue_grid_2col">
+                        <div>
+                            <label class="yue_label">Key Transposition: <span id="yue_transposition_val" class="yue_slider_val">0</span> Semitones</label>
+                            <div class="yue_slider_row">
+                                <button class="yue_btn" id="yue_btn_transpose_down">-1</button>
+                                <input type="range" class="yue_slider" id="yue_transposition_slider" min="-12" max="12" step="1" value="0">
+                                <button class="yue_btn" id="yue_btn_transpose_up">+1</button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="yue_label">Modal Modulation</label>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="yue_btn" id="yue_btn_mode_minor">Convert to Minor (Melancholic)</button>
+                                <button class="yue_btn" id="yue_btn_mode_major">Convert to Major (Uplifting)</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; margin-top: 20px;">
+                        <button class="yue_btn yue_btn_primary" id="yue_btn_extract_melody_to_score">Extract Melody to Score</button>
+                        <button class="yue_btn" id="yue_btn_align_lyrics">Align Lyrics to Melody</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: SYMBOLIC SCORE -->
+            <div class="yue_tab_pane" id="yue_tab_score">
+                <div class="yue_card">
+                    <div class="yue_card_title" style="justify-content: space-between;">
+                        <span><span>📜</span> Sheet Music Score & ABC Notation</span>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="yue_btn" id="yue_btn_export_midi" style="font-size: 11px; padding: 4px 10px;">⬇ MIDI (.mid)</button>
+                            <button class="yue_btn" id="yue_btn_export_musicxml" style="font-size: 11px; padding: 4px 10px;">⬇ MusicXML</button>
+                            <button class="yue_btn" id="yue_btn_export_abc" style="font-size: 11px; padding: 4px 10px;">⬇ ABC (.abc)</button>
+                        </div>
+                    </div>
+
+                    <!-- Visual Staff Canvas -->
+                    <div style="height: 180px; background-color: var(--yue-bg-elevated); border: 1px solid var(--yue-border); border-radius: 8px; margin-bottom: 20px; overflow: hidden;">
+                        <canvas id="yue_score_canvas" style="width: 100%; height: 100%;"></canvas>
+                    </div>
+
+                    <!-- ABC Editor -->
+                    <div class="yue_form_group">
+                        <label class="yue_label" for="yue_abc_editor_textarea">ABC Code Editor</label>
+                        <textarea class="yue_textarea" id="yue_abc_editor_textarea" rows="8" placeholder="X:1&#10;T:Demo Song&#10;M:4/4&#10;L:1/8&#10;Q:1/4=120&#10;K:C&#10;| &quot;C&quot; C2 E2 G2 c2 | &quot;Am&quot; A2 c2 e2 a2 |"></textarea>
+                    </div>
+                    <button class="yue_btn yue_btn_primary" id="yue_btn_update_score">Update Visual Score</button>
+                </div>
+            </div>
+
+            <!-- TAB 4: LIBRARY -->
+            <div class="yue_tab_pane" id="yue_tab_library">
+                <div class="yue_card">
+                    <div class="yue_card_title"><span>📚</span> Generation Archive</div>
+                    <table class="yue_table" id="yue_history_table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Duration</th>
+                                <th>Style Tags</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="yue_history_tbody">
+                            <tr><td colspan="5" style="text-align: center; color: #94a3b8;">Loading history...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB 5: MODELS -->
+            <div class="yue_tab_pane" id="yue_tab_models">
+                <div class="yue_card">
+                    <div class="yue_card_title"><span>🧠</span> Model Weights Status</div>
+                    <div class="yue_grid_2col">
+                        <div style="background-color: var(--yue-bg-elevated); padding: 14px; border-radius: 8px; border: 1px solid var(--yue-border);">
+                            <h4 style="color: #fff; margin-bottom: 6px;">Stage 1 LLaMA (7B)</h4>
+                            <p style="font-size: 12px; color: var(--yue-text-muted);">Models/stage1 & stage1-zh</p>
+                            <span class="yue_badge" style="margin-top: 10px; display: inline-flex;">✓ Ready on Disk</span>
+                        </div>
+                        <div style="background-color: var(--yue-bg-elevated); padding: 14px; border-radius: 8px; border: 1px solid var(--yue-border);">
+                            <h4 style="color: #fff; margin-bottom: 6px;">Stage 2 Refinement (1B)</h4>
+                            <p style="font-size: 12px; color: var(--yue-text-muted);">Models/stage2</p>
+                            <span class="yue_badge" style="margin-top: 10px; display: inline-flex;">✓ Ready on Disk</span>
+                        </div>
+                        <div style="background-color: var(--yue-bg-elevated); padding: 14px; border-radius: 8px; border: 1px solid var(--yue-border);">
+                            <h4 style="color: #fff; margin-bottom: 6px;">X-Codec SoundStream Vocoder</h4>
+                            <p style="font-size: 12px; color: var(--yue-text-muted);">Models/xcodec/final_ckpt</p>
+                            <span class="yue_badge" style="margin-top: 10px; display: inline-flex;">✓ Ready on Disk</span>
+                        </div>
+                        <div style="background-color: var(--yue-bg-elevated); padding: 14px; border-radius: 8px; border: 1px solid var(--yue-border);">
+                            <h4 style="color: #fff; margin-bottom: 6px;">Vocos Upsampler (44.1kHz)</h4>
+                            <p style="font-size: 12px; color: var(--yue-text-muted);">Models/upsampler</p>
+                            <span class="yue_badge" style="margin-top: 10px; display: inline-flex;">✓ Ready on Disk</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 6: SETTINGS -->
+            <div class="yue_tab_pane" id="yue_tab_settings">
+                <div class="yue_card">
+                    <div class="yue_card_title"><span>⚙️</span> Studio Preferences</div>
+                    <div class="yue_form_group">
+                        <label class="yue_label" for="yue_setting_models_path">Model Weights Path</label>
+                        <input type="text" class="yue_input" id="yue_setting_models_path">
+                    </div>
+                    <div class="yue_form_group">
+                        <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+                            <input type="checkbox" id="yue_setting_unload_stage1" checked>
+                            Automatically unload Stage 1 from GPU/MPS memory before Stage 2
+                        </label>
+                    </div>
+                    <button class="yue_btn yue_btn_primary" id="yue_btn_save_settings">Save Preferences to SQLite</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fixed Bottom Waveform Audio Player -->
+        <div id="yue_player_bar">
+            <button class="yue_btn yue_btn_primary" id="yue_btn_play_pause" style="min-width: 90px; justify-content: center;">▶ Play</button>
+            <span class="yue_slider_val" id="yue_time_display">0:00 / 0:00</span>
+            <div class="yue_waveform_wrapper">
+                <canvas id="yue_waveform_canvas"></canvas>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 13px;">🔊</span>
+                <input type="range" class="yue_slider" id="yue_volume_slider" min="0" max="1" step="0.05" value="1.0" style="width: 80px;">
+            </div>
+            <a id="yue_btn_download_wav" download class="yue_btn" style="display: none; font-size: 12px; text-decoration: none;">⬇ WAV</a>
+        </div>
+
+        <!-- Fixed Footer Bar (Rules 7, 8) -->
+        <footer id="yue_build_footer">
+            <div class="yue_footer_item" id="yue_footer_build_no">Build: 2026092101</div>
+            <div class="yue_footer_item" id="yue_footer_device">Device: Initializing...</div>
+            <div class="yue_footer_item" id="yue_footer_memory">RAM: Initializing...</div>
+        </footer>
+    </main>
+
+    <!-- Scripts with Cache-Busting -->
+    <script src="/static/js/yue_waveform.js?v=2026092004"></script>
+    <script src="/static/js/yue_score.js?v=2026092004"></script>
+    <script src="/static/js/yue_cover.js?v=2026092004"></script>
+    <script src="/static/js/yue_app.js?v=2026092004"></script>
+</body>
+</html>
