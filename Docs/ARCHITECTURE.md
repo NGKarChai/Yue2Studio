@@ -90,7 +90,7 @@ YuE Native macOS Studio is a 100% native Apple Silicon desktop application for m
 - **Storage**: Thread-safe SQLite3 database (`storage.sqlite3`).
 - **No Hardcoded Data**: All user settings, generation history, presets, and model registry are queried dynamically.
 - **State Management**: SwiftUI `@Observable` / `ObservableObject` architecture (`AppState`).
-- **Build Number**: `2026092301` (Current date + sequence number).
+- **Build Number**: `2026092302` (Current date + sequence number).
 - **Target Platform**: macOS 14.0+ (Apple Silicon M1/M2/M3/M4)  
 - **Display**: Fixed footer bar in the main application window showing build number and real-time unified memory consumption.
 - **Top-P (Nucleus) Acoustic Filtering**: Rejects improbable acoustic codes in the tail of the distribution, eliminating vocal rasps, static, and phase noise.
