@@ -4,7 +4,7 @@ import AVFoundation
 
 @Observable
 public final class AppState: @unchecked Sendable {
-    public static let buildNumber = "2026092402"
+    public static let buildNumber = "2026092403"
 
     // Core Pipeline Engines
     public let database: SQLiteDatabase
