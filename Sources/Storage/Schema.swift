@@ -96,7 +96,9 @@ public struct Schema {
                     ("g2", "Acoustic Ballad", "acoustic guitar, warm piano, soft male vocal, emotional, intimate reverb, 75 bpm", "Gentle acoustic guitar ballad"),
                     ("g3", "Synthwave / Cyberpunk", "analog synthesizer, 80s drum machine, driving bassline, vocoder vocal, retro wave, 115 bpm", "Retro-futuristic electronic synthwave"),
                     ("g4", "Cinematic Orchestral", "grand symphonic orchestra, soaring strings, epic brass, choral backing, dramatic, 90 bpm", "Epic cinematic soundtrack theme"),
-                    ("g5", "R&B / Soul Groove", "smooth electric piano, funky bassline, soul vocal, laid back groove, rimshot, 88 bpm", "Smooth mellow R&B groove")
+                    ("g5", "R&B / Soul Groove", "smooth electric piano, funky bassline, soul vocal, laid back groove, rimshot, 88 bpm", "Smooth mellow R&B groove"),
+                    ("g6", "Pure Instrumental / Piano", "instrumental, solo piano, gentle acoustic, emotional melody, cinematic, warm reverb, no vocals, 85 bpm", "Pure acoustic piano instrumental background music"),
+                    ("g7", "Lo-Fi Instrumental Beats", "instrumental, lo-fi hip hop, chill beats, rhodes piano, vinyl crackle, mellow bass, no vocals, 80 bpm", "Chill instrumental lo-fi background beats")
                 ]
 
                 for item in initialGenres {
@@ -128,6 +130,17 @@ public struct Schema {
                         Hear the music rising high
                         Painting colors in the sky
                         We are singing through the rain
+                        """
+                    ),
+                    (
+                        "l3",
+                        "Pure Instrumental Arrangement",
+                        """
+                        [intro]
+                        [inst]
+                        [solo]
+                        [inst]
+                        [outro]
                         """
                     )
                 ]

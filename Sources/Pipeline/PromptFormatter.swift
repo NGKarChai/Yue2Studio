@@ -78,6 +78,24 @@ public struct PromptFormatter {
         return (cleaned, directives)
     }
 
+    /// Checks if lyrics contain only musical section tags (e.g. [inst], [intro], [solo], [outro]) without lyrics
+    public static func isPureInstrumentalLyrics(lyrics: String) -> Bool {
+        let (cleaned, _) = extractDirectivesAndCleanLyrics(lyrics: lyrics)
+        let lines = cleaned.components(separatedBy: .newlines)
+        var hasTags = false
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            if canonicalSectionTag(from: trimmed) != nil {
+                hasTags = true
+            } else {
+                // Found vocal lyric text
+                return false
+            }
+        }
+        return hasTags || lines.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
     /// Prepares enriched genre tags with language prefix and extracted directives.
     ///
     /// `modelLanguage` is the language the loaded Stage 1 checkpoint was trained on.
@@ -95,10 +113,23 @@ public struct PromptFormatter {
         let effective = (modelLanguage == nil || modelLanguage == lang) ? lang : (modelLanguage ?? lang)
 
         let lower = tags.lowercased()
-        if effective == "zh" && !lower.contains("chinese") && !lower.contains("mandarin") && !lower.contains("cantonese") {
-            tags = "Chinese, Mandarin vocal, " + tags
-        } else if effective == "en" && !lower.contains("english") {
-            tags = "English, " + tags
+        let isInstrumental = lower.contains("instrumental")
+            || lower.contains("no vocal")
+            || lower.contains("no vocals")
+            || lower.contains("no voice")
+            || lower.contains("bgm")
+            || isPureInstrumentalLyrics(lyrics: lyrics)
+
+        if !isInstrumental {
+            if effective == "zh" && !lower.contains("chinese") && !lower.contains("mandarin") && !lower.contains("cantonese") {
+                tags = "Chinese, Mandarin vocal, " + tags
+            } else if effective == "en" && !lower.contains("english") {
+                tags = "English, " + tags
+            }
+        } else {
+            if !lower.contains("instrumental") {
+                tags = "instrumental, no vocals, " + tags
+            }
         }
 
         if !extraDirectives.isEmpty {
