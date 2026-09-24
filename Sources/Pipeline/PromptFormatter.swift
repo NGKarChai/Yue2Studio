@@ -96,6 +96,27 @@ public struct PromptFormatter {
         return hasTags || lines.allSatisfy { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
+    /// Formats lyrics into pure structural instrumental tags without vocal words
+    public static func formatInstrumentalLyrics(lyrics: String) -> String {
+        let (cleaned, _) = extractDirectivesAndCleanLyrics(lyrics: lyrics)
+        let lines = cleaned.components(separatedBy: .newlines)
+        var structuralTags: [String] = []
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty { continue }
+            if let canonical = canonicalSectionTag(from: trimmed) {
+                structuralTags.append(canonical)
+            }
+        }
+        if structuralTags.isEmpty {
+            return "[intro]\n[inst]\n[solo]\n[inst]\n[outro]\n"
+        }
+        if !structuralTags.contains("[inst]") {
+            structuralTags.insert("[inst]", at: min(1, structuralTags.count))
+        }
+        return structuralTags.joined(separator: "\n") + "\n"
+    }
+
     /// Prepares enriched genre tags with language prefix and extracted directives.
     ///
     /// `modelLanguage` is the language the loaded Stage 1 checkpoint was trained on.
@@ -106,29 +127,46 @@ public struct PromptFormatter {
         genreTags: String,
         lyrics: String,
         extraDirectives: [String] = [],
-        modelLanguage: String? = nil
+        modelLanguage: String? = nil,
+        forceInstrumental: Bool = false
     ) -> String {
         var tags = genreTags.trimmingCharacters(in: .whitespacesAndNewlines)
         let lang = detectLanguage(text: lyrics)
         let effective = (modelLanguage == nil || modelLanguage == lang) ? lang : (modelLanguage ?? lang)
 
         let lower = tags.lowercased()
-        let isInstrumental = lower.contains("instrumental")
+        let isInstrumental = forceInstrumental
+            || lower.contains("instrumental")
             || lower.contains("no vocal")
             || lower.contains("no vocals")
             || lower.contains("no voice")
             || lower.contains("bgm")
             || isPureInstrumentalLyrics(lyrics: lyrics)
 
-        if !isInstrumental {
+        if isInstrumental {
+            if forceInstrumental {
+                let vocalPatterns = [
+                    "female vocal", "male vocal", "vocals", "vocal", "vocoder vocal",
+                    "mandarin vocal", "cantonese vocal", "english vocal", "soul vocal",
+                    "choral backing", "choir", "singer", "singing"
+                ]
+                for pattern in vocalPatterns {
+                    tags = tags.replacingOccurrences(of: pattern, with: "", options: .caseInsensitive)
+                }
+                tags = tags.replacingOccurrences(of: ",\\s*,", with: ",", options: .regularExpression)
+                tags = tags.trimmingCharacters(in: CharacterSet(charactersIn: ", "))
+            }
+
+            if !tags.lowercased().contains("instrumental") {
+                tags = "instrumental, no vocals, " + tags
+            } else if !tags.lowercased().contains("no vocal") {
+                tags = tags + ", no vocals"
+            }
+        } else {
             if effective == "zh" && !lower.contains("chinese") && !lower.contains("mandarin") && !lower.contains("cantonese") {
                 tags = "Chinese, Mandarin vocal, " + tags
             } else if effective == "en" && !lower.contains("english") {
                 tags = "English, " + tags
-            }
-        } else {
-            if !lower.contains("instrumental") {
-                tags = "instrumental, no vocals, " + tags
             }
         }
 

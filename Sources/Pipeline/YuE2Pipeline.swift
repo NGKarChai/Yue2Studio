@@ -28,6 +28,7 @@ public actor YuE2Pipeline {
         lyrics: String,
         abcScore: String? = nil,
         planningMode: PlanningMode = .fullGenerated,
+        isInstrumentalOnly: Bool = false,
         maxTokens: Int = 12000,
         steps: Int = 32,
         temperature: Float = 0.9,
@@ -90,8 +91,18 @@ public actor YuE2Pipeline {
         ))
 
         let (cleanedLyrics, directives) = PromptFormatter.extractDirectivesAndCleanLyrics(lyrics: lyrics)
-        let enrichedPrompt = PromptFormatter.enrichGenreTags(genreTags: prompt, lyrics: lyrics, extraDirectives: directives)
-        let effectiveLyrics = cleanedLyrics.isEmpty ? lyrics : cleanedLyrics
+        let enrichedPrompt = PromptFormatter.enrichGenreTags(
+            genreTags: prompt,
+            lyrics: lyrics,
+            extraDirectives: directives,
+            forceInstrumental: isInstrumentalOnly
+        )
+        let effectiveLyrics: String
+        if isInstrumentalOnly {
+            effectiveLyrics = PromptFormatter.formatInstrumentalLyrics(lyrics: cleanedLyrics)
+        } else {
+            effectiveLyrics = cleanedLyrics.isEmpty ? lyrics : cleanedLyrics
+        }
 
         // Format prompt according to official YuE2 specification
         let instruction = planningMode.instruction

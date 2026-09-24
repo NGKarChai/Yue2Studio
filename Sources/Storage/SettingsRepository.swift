@@ -28,6 +28,7 @@ public final class SettingsRepository: Sendable {
         case yue2VAEDirectory = "yue2_vae_directory"
         case yue2FlowSteps = "yue2_flow_steps"
         case yue2CfgScale = "yue2_cfg_scale"
+        case isInstrumentalOnly = "is_instrumental_only"
     }
 
     public init(database: SQLiteDatabase) {
@@ -59,7 +60,8 @@ public final class SettingsRepository: Sendable {
             .yue2ModelDirectory: "Models/yue2-3b",
             .yue2VAEDirectory: "Models/yue2-vae",
             .yue2FlowSteps: "32",
-            .yue2CfgScale: "1.0"
+            .yue2CfgScale: "1.0",
+            .isInstrumentalOnly: "false"
         ]
 
         for (key, defaultValue) in defaults {

@@ -3,9 +3,9 @@
 ## 1. Quick Start & DMG Installation
 ### Installing on Other Macs via DMG
 The application is distributed as a standalone macOS disk image (`.dmg`):
-- **DMG Installer File**: `Yue2Studio-2026092401.dmg` (also accessible as `Yue2Studio.dmg`)
+- **DMG Installer File**: `Yue2Studio-2026092402.dmg` (also accessible as `Yue2Studio.dmg`)
 - **Installation**:
-  1. Double-click `Yue2Studio-2026092401.dmg` to mount the disk image.
+  1. Double-click `Yue2Studio-2026092402.dmg` to mount the disk image.
   2. Drag the `Yue2Studio` application icon into the `Applications` folder symlink.
   3. Open `Applications` and launch `Yue2Studio`.
 - **Gatekeeper First-Launch Tip**:
@@ -31,7 +31,7 @@ swift run Yue2Studio
   - **Library**: Historical generation archive with instant playback and export options.
   - **Settings**: Audio device output, default inference precision (4-bit / 8-bit / 16-bit), and memory management options.
 - **Footer**:
-  - Displays the current Build Number (`2026092401`), active model directory, and real-time unified memory usage.
+  - Displays the current Build Number (`2026092402`), active model directory, and real-time unified memory usage.
 
 ## 3. Formatting Prompts & Lyrics
 YuE recognizes structural song tags in lyrics:
@@ -137,28 +137,20 @@ Click the **Export Notes** menu in the Score editor or **Export Bundle (ABC + MI
 
 ## 9. Creating Pure Instrumental Music & Removing Vocals
 
-### 9.1 Generating Pure Instrumental Tracks (In-Model Prompting)
+### 9.1 Generating Pure Instrumental Tracks (1-Click Checkbox & In-Model Prompting)
 YuE2 is trained on paired lyric-song data. To force the model to compose **pure instrumental music without any vocal singing or humming**:
-1. **Genre Style Tags**:
-   - Use explicit negative vocal indicators and instrumental descriptors:
-     `instrumental, no vocals, background music, soundtrack, acoustic, solo piano`
-   - Never use words like `vocal`, `singer`, `singing`, `female`, `male`, or `choir`.
-   - Built-in presets: Select **Pure Instrumental / Piano** or **Lo-Fi Instrumental Beats** in the Studio presets menu.
-2. **Lyrics Box Formatting**:
-   - **Do NOT leave the lyrics box completely blank** (blank prompts can cause autoregressive models to hallucinate random phonetic chatter).
-   - Instead, structure the lyrics box using pure structural musical tags:
-     ```text
-     [intro]
-     [inst]
-     [solo]
-     [inst]
-     [outro]
-     ```
-     Or simply:
-     ```text
-     [inst]
-     ```
-3. **Generation Mode**:
+1. **1-Click "Instrumental Only (No Vocals)" Checkbox (Recommended)**:
+   - Check the **Instrumental Only (No Vocals)** checkbox in the Studio tab.
+   - When enabled, Yue2Studio automatically:
+     - Strips any vocal directives (`vocal`, `singer`, `singing`, `choir`, etc.) from your style prompt.
+     - Automatically injects `instrumental, no vocals` conditioning tags.
+     - Converts lyrics or section tags into pure structural accompaniment markers (`[inst]`), preventing the semantic planner from generating vocal tokens.
+     - Preserves your setting automatically across sessions in SQLite (`app_settings`).
+2. **Genre Style Tags & Presets**:
+   - You can also select the built-in **Pure Instrumental / Piano** or **Lo-Fi Instrumental Beats** from the Presets menu.
+3. **Lyrics Box Formatting**:
+   - When Instrumental Only is checked, you can leave the box as-is or use structural tags (`[intro]`, `[inst]`, `[solo]`, `[outro]`) using the quick-insert buttons.
+4. **Generation Mode**:
    - Set **YuE2 Generation Mode** to **Off (Direct Generation)** or **Full + Generated Score**.
 
 ### 9.2 Removing Vocals from Already Generated Audio (Post-Processing)

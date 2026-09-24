@@ -4,7 +4,7 @@ import AVFoundation
 
 @Observable
 public final class AppState: @unchecked Sendable {
-    public static let buildNumber = "2026092401"
+    public static let buildNumber = "2026092402"
 
     // Core Pipeline Engines
     public let database: SQLiteDatabase
@@ -244,6 +244,11 @@ public final class AppState: @unchecked Sendable {
             settingsRepo.set(key: .planningMode, value: planningMode.rawValue)
         }
     }
+    public var isInstrumentalOnly: Bool = false {
+        didSet {
+            settingsRepo.set(key: .isInstrumentalOnly, value: isInstrumentalOnly ? "true" : "false")
+        }
+    }
     public let symbolicPlanner = SymbolicPlanner()
 
     // Acoustic Mastering & Stereo Width
@@ -423,6 +428,9 @@ public final class AppState: @unchecked Sendable {
         if let vDir = settingsRepo.get(key: .yue2VAEDirectory), !vDir.isEmpty {
             self.yue2VAEDirectory = AppPaths.resolvePath(vDir)
         }
+        if let instStr = settingsRepo.get(key: .isInstrumentalOnly) {
+            self.isInstrumentalOnly = (instStr == "true")
+        }
 
         self.presetGenres = presetRepo.getGenres()
         self.presetLyrics = presetRepo.getLyrics()
@@ -592,6 +600,7 @@ public final class AppState: @unchecked Sendable {
                     lyrics: currentLyrics,
                     abcScore: scoreToUse,
                     planningMode: planningMode,
+                    isInstrumentalOnly: self.isInstrumentalOnly,
                     maxTokens: currentTokens,
                     steps: yue2Steps,
                     temperature: Float(currentTemp),

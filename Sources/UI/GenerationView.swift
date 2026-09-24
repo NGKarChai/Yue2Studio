@@ -109,6 +109,35 @@ public struct GenerationView: View {
                             .font(.callout)
                     }
 
+                    // Instrumental Only Checkbox Bar
+                    HStack(spacing: 10) {
+                        Toggle(isOn: $appState.isInstrumentalOnly) {
+                            HStack(spacing: 6) {
+                                Image(systemName: appState.isInstrumentalOnly ? "guitars.fill" : "mic.fill")
+                                    .foregroundColor(appState.isInstrumentalOnly ? .green : .accentColor)
+                                    .font(.subheadline)
+                                Text("Instrumental Only (No Vocals)")
+                                    .font(.subheadline)
+                                    .fontWeight(appState.isInstrumentalOnly ? .semibold : .regular)
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        .help("Check to generate pure instrumental music. Automatically suppresses all vocal prompts and formats arrangement for instrumental accompaniment.")
+
+                        if appState.isInstrumentalOnly {
+                            Text("• Pure Instrumental Mode Active")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.green.opacity(0.12))
+                                .cornerRadius(4)
+                        }
+
+                        Spacer()
+                    }
+                    .padding(.vertical, 2)
+
                     // Structured Lyrics Editor (bounded height so it doesn't push controls away)
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
@@ -125,6 +154,7 @@ public struct GenerationView: View {
                                 tagButton("[chorus]")
                                 tagButton("[bridge]")
                                 tagButton("[intro]")
+                                tagButton("[inst]")
                                 tagButton("[outro]")
                             }
                         }

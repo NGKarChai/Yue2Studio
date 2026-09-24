@@ -5,7 +5,7 @@
 [![Platform: macOS 14.0+](https://img.shields.io/badge/Platform-macOS%2014.0%2B-blue.svg)](#)
 [![Hardware: Apple Silicon](https://img.shields.io/badge/Hardware-Apple%20Silicon%20(M1%2FM2%2FM3%2FM4)-black.svg)](#)
 [![Engine: MLX Swift](https://img.shields.io/badge/Engine-MLX%20Swift%20%2F%20Metal-orange.svg)](#)
-[![Build: 2026092401](https://img.shields.io/badge/Build-2026092401-brightgreen.svg)](#)
+[![Build: 2026092402](https://img.shields.io/badge/Build-2026092402-brightgreen.svg)](#)
 [![License: Apache 2.0 / MIT](https://img.shields.io/badge/License-Commercial%20Friendly-green.svg)](#)
 
 ---
