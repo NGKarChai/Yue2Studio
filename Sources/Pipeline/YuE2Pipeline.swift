@@ -105,17 +105,24 @@ public actor YuE2Pipeline {
         }
 
         // Format prompt according to official YuE2 specification
-        let instruction = planningMode.instruction
+        let instruction: String
         let scoreToEncode: String?
 
-        if planningMode == .direct {
+        if isInstrumentalOnly {
+            instruction = "Generate pure instrumental music without vocals or singing from the given conditions."
+            // Never feed starter vocal melody template when instrumental-only mode is active
             scoreToEncode = nil
-        } else if let score = abcScore, !score.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            scoreToEncode = score
         } else {
-            // Generate standard ABC score template with tempo and chords if no score is supplied
-            let generated = SymbolicPlanner().generateStarterTemplate(title: "YuE2 Melody Plan", genreTags: prompt, lyrics: effectiveLyrics)
-            scoreToEncode = generated
+            instruction = planningMode.instruction
+            if planningMode == .direct {
+                scoreToEncode = nil
+            } else if let score = abcScore, !score.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                scoreToEncode = score
+            } else {
+                // Generate standard ABC score template with tempo and chords if no score is supplied
+                let generated = SymbolicPlanner().generateStarterTemplate(title: "YuE2 Melody Plan", genreTags: prompt, lyrics: effectiveLyrics)
+                scoreToEncode = generated
+            }
         }
 
         let requestText = "\(instruction)\n[Tags]\n\(enrichedPrompt)\n[Lyrics]\n\(effectiveLyrics)\n"
@@ -261,12 +268,22 @@ public actor YuE2Pipeline {
             )
         }
 
+        var finalBuffer = buffer
+        if isInstrumentalOnly {
+            onProgress(PipelineProgress(
+                phase: .decodingAudio,
+                progressFraction: 0.98,
+                statusMessage: "YuE2 DSP: Applying center-channel vocal suppression & bass preservation..."
+            ))
+            finalBuffer = AudioBufferUtils.suppressVocals(buffer: buffer)
+        }
+
         onProgress(PipelineProgress(
             phase: .complete,
             progressFraction: 1.0,
             statusMessage: "YuE2 Song generation complete! 48.0 kHz Stereo (\(targetDurationSec)s)."
         ))
 
-        return buffer
+        return finalBuffer
     }
 }

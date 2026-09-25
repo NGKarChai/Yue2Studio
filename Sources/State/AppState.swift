@@ -4,7 +4,7 @@ import AVFoundation
 
 @Observable
 public final class AppState: @unchecked Sendable {
-    public static let buildNumber = "2026092403"
+    public static let buildNumber = "2026092501"
 
     // Core Pipeline Engines
     public let database: SQLiteDatabase
@@ -779,6 +779,95 @@ public final class AppState: @unchecked Sendable {
                 self.isGenerating = false
                 self.currentProgress = PipelineProgress(phase: .idle, statusMessage: "Generation cancelled.")
             }
+        }
+    }
+
+    /// Extracts clean instrumental audio from current active buffer and saves to history
+    @MainActor
+    public func extractInstrumentalFromActiveBuffer() {
+        guard let buffer = activeAudioBuffer else { return }
+        let instrumentalBuffer = AudioBufferUtils.suppressVocals(buffer: buffer)
+
+        let outputDir = AppPaths.defaultGenerationsURL
+        let filename = "instrumental_\(Int(Date().timeIntervalSince1970)).wav"
+        let audioURL = outputDir.appendingPathComponent(filename)
+
+        do {
+            try AudioExporter.export(buffer: instrumentalBuffer, to: audioURL, format: .wav)
+            let duration = Double(instrumentalBuffer.frameLength) / instrumentalBuffer.format.sampleRate
+            let baseTitle = songTitle.isEmpty ? "Song" : songTitle
+            let newTitle = baseTitle.hasPrefix("[Instrumental]") ? baseTitle : "[Instrumental] \(baseTitle)"
+
+            let record = GenerationRecord(
+                title: newTitle,
+                genreTags: genreTags + ", instrumental",
+                lyrics: "[inst]",
+                temperature: temperature,
+                topP: topP,
+                cfgScale: cfgScale,
+                maxTokens: maxTokens,
+                seed: seed,
+                audioPath: audioURL.path,
+                durationSeconds: duration,
+                status: "completed"
+            )
+            try generationRepo.insert(record: record)
+
+            self.activeAudioBuffer = instrumentalBuffer
+            self.latestAudioPath = audioURL.path
+            self.songTitle = newTitle
+            self.audioPlayer.load(buffer: instrumentalBuffer)
+            self.historyRecords = self.generationRepo.getAll()
+        } catch {
+            print("[AppState] Error exporting instrumental audio: \(error)")
+        }
+    }
+
+    /// Extracts clean instrumental audio for a specific history record
+    @MainActor
+    public func extractInstrumental(for record: GenerationRecord) {
+        let fileURL = URL(fileURLWithPath: record.audioPath)
+        guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+
+        do {
+            let audioFile = try AVAudioFile(forReading: fileURL)
+            let format = audioFile.processingFormat
+            let frameCount = AVAudioFrameCount(audioFile.length)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return }
+            try audioFile.read(into: buffer)
+
+            let instrumentalBuffer = AudioBufferUtils.suppressVocals(buffer: buffer)
+            let outputDir = AppPaths.defaultGenerationsURL
+            let filename = "instrumental_\(Int(Date().timeIntervalSince1970)).wav"
+            let audioURL = outputDir.appendingPathComponent(filename)
+
+            try AudioExporter.export(buffer: instrumentalBuffer, to: audioURL, format: .wav)
+            let duration = Double(instrumentalBuffer.frameLength) / instrumentalBuffer.format.sampleRate
+            let newTitle = record.title.hasPrefix("[Instrumental]") ? record.title : "[Instrumental] \(record.title)"
+
+            let newRecord = GenerationRecord(
+                title: newTitle,
+                genreTags: record.genreTags + ", instrumental",
+                lyrics: "[inst]",
+                temperature: record.temperature,
+                topP: record.topP,
+                cfgScale: record.cfgScale,
+                maxTokens: record.maxTokens,
+                seed: record.seed,
+                audioPath: audioURL.path,
+                durationSeconds: duration,
+                status: "completed"
+            )
+            try generationRepo.insert(record: newRecord)
+
+            self.activeAudioBuffer = instrumentalBuffer
+            self.latestAudioPath = audioURL.path
+            self.songTitle = newTitle
+            self.audioPlayer.load(buffer: instrumentalBuffer)
+            self.historyRecords = self.generationRepo.getAll()
+            self.currentTab = .studio
+        } catch {
+            print("[AppState] Error extracting instrumental: \(error)")
         }
     }
 }

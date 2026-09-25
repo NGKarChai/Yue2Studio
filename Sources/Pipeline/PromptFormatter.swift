@@ -105,16 +105,25 @@ public struct PromptFormatter {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty { continue }
             if let canonical = canonicalSectionTag(from: trimmed) {
-                structuralTags.append(canonical)
+                // Vocal section headers like [verse], [chorus], [bridge] force YuE's language model
+                // to generate vocal singing even if lyrics are blank. Convert them to [inst] or [solo].
+                if canonical == "[intro]" || canonical == "[outro]" || canonical == "[solo]" || canonical == "[inst]" {
+                    structuralTags.append(canonical)
+                } else {
+                    structuralTags.append("[inst]")
+                }
             }
         }
         if structuralTags.isEmpty {
-            return "[intro]\n[inst]\n[solo]\n[inst]\n[outro]\n"
+            return "[intro]\n\n[inst]\n\n[solo]\n\n[inst]\n\n[outro]\n"
         }
         if !structuralTags.contains("[inst]") {
             structuralTags.insert("[inst]", at: min(1, structuralTags.count))
         }
-        return structuralTags.joined(separator: "\n") + "\n"
+
+        // Official YuE specification requires blank lines between section tags:
+        // [intro]\n\n[inst]\n\n[outro]
+        return structuralTags.joined(separator: "\n\n") + "\n"
     }
 
     /// Prepares enriched genre tags with language prefix and extracted directives.
@@ -146,9 +155,12 @@ public struct PromptFormatter {
         if isInstrumental {
             if forceInstrumental {
                 let vocalPatterns = [
-                    "female vocal", "male vocal", "vocals", "vocal", "vocoder vocal",
-                    "mandarin vocal", "cantonese vocal", "english vocal", "soul vocal",
-                    "choral backing", "choir", "singer", "singing"
+                    "female vocal", "male vocal", "female vocals", "male vocals",
+                    "lead vocal", "lead vocals", "backing vocal", "backing vocals",
+                    "vocals", "vocal", "vocoder vocal", "mandarin vocal", "cantonese vocal",
+                    "english vocal", "soul vocal", "choral backing", "choir",
+                    "singer", "singing", "vocalist", "voice", "voices",
+                    "soprano", "tenor", "baritone", "alto", "rap", "rapper", "speech", "spoken word"
                 ]
                 for pattern in vocalPatterns {
                     tags = tags.replacingOccurrences(of: pattern, with: "", options: .caseInsensitive)
@@ -157,10 +169,11 @@ public struct PromptFormatter {
                 tags = tags.trimmingCharacters(in: CharacterSet(charactersIn: ", "))
             }
 
+            let instPrefix = "instrumental, pure music, backing track, no vocals, no voice, no singer"
             if !tags.lowercased().contains("instrumental") {
-                tags = "instrumental, no vocals, " + tags
+                tags = instPrefix + ", " + tags
             } else if !tags.lowercased().contains("no vocal") {
-                tags = tags + ", no vocals"
+                tags = tags + ", pure music, no vocals, no voice"
             }
         } else {
             if effective == "zh" && !lower.contains("chinese") && !lower.contains("mandarin") && !lower.contains("cantonese") {

@@ -84,6 +84,18 @@ public struct HistoryView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
 
+                Button(action: {
+                    appState.extractInstrumental(for: record)
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "guitars.fill")
+                        Text("Extract Instrumental")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Extract a clean instrumental version of this track with vocals removed")
+
                 Button(role: .destructive, action: {
                     appState.generationRepo.delete(id: record.id)
                     appState.historyRecords = appState.generationRepo.getAll()

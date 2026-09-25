@@ -3,9 +3,9 @@
 ## 1. Quick Start & DMG Installation
 ### Installing on Other Macs via DMG
 The application is distributed as a standalone macOS disk image (`.dmg`):
-- **DMG Installer File**: `Yue2Studio-2026092403.dmg` (also accessible as `Yue2Studio.dmg`)
+- **DMG Installer File**: `Yue2Studio-2026092501.dmg` (also accessible as `Yue2Studio.dmg`)
 - **Installation**:
-  1. Double-click `Yue2Studio-2026092403.dmg` to mount the disk image.
+  1. Double-click `Yue2Studio-2026092501.dmg` to mount the disk image.
   2. Drag the `Yue2Studio` application icon into the `Applications` folder symlink.
   3. Open `Applications` and launch `Yue2Studio`.
 - **Gatekeeper First-Launch Tip**:
@@ -31,7 +31,7 @@ swift run Yue2Studio
   - **Library**: Historical generation archive with instant playback and export options.
   - **Settings**: Audio device output, default inference precision (4-bit / 8-bit / 16-bit), and memory management options.
 - **Footer**:
-  - Displays the current Build Number (`2026092403`), active model directory, and real-time unified memory usage.
+  - Displays the current Build Number (`2026092501`), active model directory, and real-time unified memory usage.
 
 ## 3. Formatting Prompts & Lyrics
 YuE recognizes structural song tags in lyrics:
@@ -142,9 +142,11 @@ YuE2 is trained on paired lyric-song data. To force the model to compose **pure 
 1. **1-Click "Instrumental Only (No Vocals)" Checkbox (Recommended)**:
    - Check the **Instrumental Only (No Vocals)** checkbox in the Studio tab.
    - When enabled, Yue2Studio automatically:
-     - Strips any vocal directives (`vocal`, `singer`, `singing`, `choir`, etc.) from your style prompt.
-     - Automatically injects `instrumental, no vocals` conditioning tags.
-     - Converts lyrics or section tags into pure structural accompaniment markers (`[inst]`), preventing the semantic planner from generating vocal tokens.
+     - Strips any vocal directives (`vocal`, `singer`, `singing`, `choir`, `voice`, etc.) from your style prompt.
+     - Automatically injects `instrumental, pure music, backing track, no vocals, no voice, no singer` conditioning tags.
+     - Canonicalizes all section tags in lyrics (`[verse]`, `[chorus]`, `[bridge]`, etc.) into pure structural accompaniment markers (`[inst]`), formatted with blank lines per official YuE specifications.
+     - Bypasses vocal melody line injection into symbolic scores so the autoregressive model doesn't generate singing.
+     - Automatically executes an acoustic DSP center-channel vocal suppression pass with low-frequency bass (< 160 Hz) and high-frequency shimmer preservation on the decoded 48 kHz stereo buffer.
      - Preserves your setting automatically across sessions in SQLite (`app_settings`).
 2. **Genre Style Tags & Presets**:
    - You can also select the built-in **Pure Instrumental / Piano** or **Lo-Fi Instrumental Beats** from the Presets menu.
@@ -153,10 +155,15 @@ YuE2 is trained on paired lyric-song data. To force the model to compose **pure 
 4. **Generation Mode**:
    - Set **YuE2 Generation Mode** to **Off (Direct Generation)** or **Full + Generated Score**.
 
-### 9.2 Removing Vocals from Already Generated Audio (Post-Processing)
+### 9.2 Removing Vocals from Already Generated Audio (1-Click Built-in or Post-Processing)
 If an existing generated song contains vocals that you wish to remove:
 
-#### Method A: AI Stem Separation via Demucs (Studio Master Quality)
+#### Method A: 1-Click "Extract Instrumental" in Yue2Studio (Built-in)
+- In the **Waveform Player** at the bottom of the Studio tab, click the **Extract Instrumental** button (guitar icon).
+- Or in the **Library** tab, click **Extract Instrumental** next to any track.
+- Yue2Studio applies real-time Mid-Side DSP center vocal cancellation (-33 dB attenuation on center vocal formants) while keeping 100% of the punchy mono bass and stereo instrumental panning intact. The clean instrumental version is saved as `[Instrumental] <Song Title>` and loaded immediately.
+
+#### Method B: AI Stem Separation via Demucs (Studio Master Quality)
 Meta AI's open-source **Demucs v4** (`htdemucs`) is the gold standard for vocal isolation on Apple Silicon:
 ```bash
 # 1. Install Demucs
@@ -167,10 +174,11 @@ demucs --two-stems=vocals path/to/your_song.wav
 ```
 The resulting `no_vocals.wav` retains 100% of the drums, bass, synths, and guitars with zero vocal bleed.
 
-#### Method B: Real-Time Center-Channel Vocal Cancellation (FFmpeg DSP)
+#### Method C: FFmpeg DSP Mid-Side Cancellation
 Because YuE2 outputs 48 kHz stereo with the vocal centered ($L \approx R$) and instruments spread wide:
 ```bash
 # Cancel center vocal channel using Mid-Side processing
 ffmpeg -i your_song.wav -af "stereotools=mlev=0:slev=1" instrumental.wav
 ```
-This instantly attenuates the center lead vocal without requiring machine learning models.
+This instantly attenuates the center lead vocal without requiring external models.
+

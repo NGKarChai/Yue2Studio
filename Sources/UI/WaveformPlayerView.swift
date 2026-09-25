@@ -5,14 +5,21 @@ public struct WaveformPlayerView: View {
     @Bindable var player: AudioPlaybackEngine
     var audioBuffer: AVAudioPCMBuffer?
     var onExport: (() -> Void)?
+    var onExtractInstrumental: (() -> Void)?
 
     @State private var exportFormat: AudioExporter.AudioFormat = .wav
     @State private var showingExportSuccess: Bool = false
 
-    public init(player: AudioPlaybackEngine, audioBuffer: AVAudioPCMBuffer? = nil, onExport: (() -> Void)? = nil) {
+    public init(
+        player: AudioPlaybackEngine,
+        audioBuffer: AVAudioPCMBuffer? = nil,
+        onExport: (() -> Void)? = nil,
+        onExtractInstrumental: (() -> Void)? = nil
+    ) {
         self.player = player
         self.audioBuffer = audioBuffer
         self.onExport = onExport
+        self.onExtractInstrumental = onExtractInstrumental
     }
 
     public var body: some View {
@@ -110,6 +117,21 @@ public struct WaveformPlayerView: View {
                 }
 
                 Divider().frame(height: 16)
+
+                // Extract Instrumental Button
+                if let onExtract = onExtractInstrumental {
+                    Button(action: {
+                        onExtract()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "guitars.fill")
+                            Text("Extract Instrumental")
+                        }
+                        .font(.caption)
+                    }
+                    .disabled(audioBuffer == nil)
+                    .help("Cancel center lead vocals and extract a pure instrumental track preserving bass and instruments")
+                }
 
                 // Export Button
                 Button(action: {

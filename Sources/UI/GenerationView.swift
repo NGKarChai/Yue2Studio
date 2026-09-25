@@ -268,7 +268,10 @@ public struct GenerationView: View {
                     // Waveform Player
                     WaveformPlayerView(
                         player: appState.audioPlayer,
-                        audioBuffer: appState.activeAudioBuffer
+                        audioBuffer: appState.activeAudioBuffer,
+                        onExtractInstrumental: {
+                            appState.extractInstrumentalFromActiveBuffer()
+                        }
                     )
                 }
                 .padding(16)
