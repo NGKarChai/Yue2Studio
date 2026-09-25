@@ -403,13 +403,9 @@ public final class YuE2NARFlowMatching: Module, @unchecked Sendable {
             mappedWeights[key] = value
         }
 
-        // Check if AR weights have model.norm.weight to populate norm
-        let arCandidate = directory.appendingPathComponent("ar-8bit.safetensors")
-        if FileManager.default.fileExists(atPath: arCandidate.path) {
-            if let arWeights = try? MLX.loadArrays(url: arCandidate),
-               let normWeight = arWeights["model.norm.weight"] {
-                mappedWeights["norm.weight"] = normWeight
-            }
+        // If norm.weight is missing from NAR checkpoint, default to unit weights
+        if mappedWeights["norm.weight"] == nil {
+            mappedWeights["norm.weight"] = MLXArray.ones([config.hiddenSize])
         }
 
         let _ = self.update(parameters: ModuleParameters.unflattened(mappedWeights))

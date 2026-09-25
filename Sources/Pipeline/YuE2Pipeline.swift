@@ -49,6 +49,7 @@ public actor YuE2Pipeline {
 
         // 1. Loading Models (cached if paths have not changed)
         if loadedVaeDir != vaeDirectory {
+            try validateWeightFilesNotEvicted(in: vaeDirectory)
             onProgress(PipelineProgress(
                 phase: .loadingModels,
                 progressFraction: 0.05,
@@ -59,6 +60,7 @@ public actor YuE2Pipeline {
         }
 
         if loadedModelDir != modelDirectory {
+            try validateWeightFilesNotEvicted(in: modelDirectory)
             onProgress(PipelineProgress(
                 phase: .loadingModels,
                 progressFraction: 0.10,
@@ -285,5 +287,30 @@ public actor YuE2Pipeline {
         ))
 
         return finalBuffer
+    }
+
+    /// Verifies that model weight files are physically resident on disk and not evicted by iCloud Drive.
+    /// On macOS, evicted files have st_blocks == 0 or flag SF_DATALESS (0x40000000). Reading them blocks
+    /// the thread on kernel cloud-fault I/O.
+    private func validateWeightFilesNotEvicted(in directory: URL) throws {
+        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
+        for file in files {
+            let ext = file.pathExtension.lowercased()
+            if ext == "safetensors" || ext == "bin" || ext == "tiktoken" {
+                var st = stat()
+                if stat(file.path, &st) == 0 {
+                    // 0x40000000 = SF_DATALESS
+                    if st.st_blocks == 0 || (st.st_flags & 0x40000000) != 0 {
+                        throw NSError(
+                            domain: "YuE2Pipeline",
+                            code: 412,
+                            userInfo: [
+                                NSLocalizedDescriptionKey: "Model weight '\(file.lastPathComponent)' was evicted by iCloud Drive / macOS storage optimization (0 bytes allocated on disk). Please re-download in Model Manager or move Models to Models.nosync to prevent eviction."
+                            ]
+                        )
+                    }
+                }
+            }
+        }
     }
 }

@@ -3,9 +3,9 @@
 ## 1. Quick Start & DMG Installation
 ### Installing on Other Macs via DMG
 The application is distributed as a standalone macOS disk image (`.dmg`):
-- **DMG Installer File**: `Yue2Studio-2026092501.dmg` (also accessible as `Yue2Studio.dmg`)
+- **DMG Installer File**: `Yue2Studio-2026092502.dmg` (also accessible as `Yue2Studio.dmg`)
 - **Installation**:
-  1. Double-click `Yue2Studio-2026092501.dmg` to mount the disk image.
+  1. Double-click `Yue2Studio-2026092502.dmg` to mount the disk image.
   2. Drag the `Yue2Studio` application icon into the `Applications` folder symlink.
   3. Open `Applications` and launch `Yue2Studio`.
 - **Gatekeeper First-Launch Tip**:
@@ -31,7 +31,7 @@ swift run Yue2Studio
   - **Library**: Historical generation archive with instant playback and export options.
   - **Settings**: Audio device output, default inference precision (4-bit / 8-bit / 16-bit), and memory management options.
 - **Footer**:
-  - Displays the current Build Number (`2026092501`), active model directory, and real-time unified memory usage.
+  - Displays the current Build Number (`2026092502`), active model directory, and real-time unified memory usage.
 
 ## 3. Formatting Prompts & Lyrics
 YuE recognizes structural song tags in lyrics:

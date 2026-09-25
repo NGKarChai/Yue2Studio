@@ -8,7 +8,10 @@ Icon\r
 .Trashes
 
 # Swift / Xcode
+.build
 .build/
+.build.nosync
+.build.nosync/
 .swiftpm/
 Packages/
 xcuserdata/
@@ -22,7 +25,10 @@ Yue2Studio.app/
 /mlx.metallib
 
 # Heavy Model Weights (downloaded dynamically or stored separately)
+/Models
 /Models/
+/Models.nosync
+/Models.nosync/
 
 # Generated Audio Outputs
 Generations/*

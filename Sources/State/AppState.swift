@@ -4,7 +4,7 @@ import AVFoundation
 
 @Observable
 public final class AppState: @unchecked Sendable {
-    public static let buildNumber = "2026092501"
+    public static let buildNumber = "2026092502"
 
     // Core Pipeline Engines
     public let database: SQLiteDatabase
@@ -479,6 +479,13 @@ public final class AppState: @unchecked Sendable {
             if ext == "safetensors" || ext == "bin" || ext == "mlmodelc" || ext == "pth" {
                 let size = (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
                 if size > 1_000_000 {
+                    var st = stat()
+                    if stat(file.path, &st) == 0 {
+                        // Exclude evicted dataless cloud files (SF_DATALESS = 0x40000000 or st_blocks == 0)
+                        if st.st_blocks == 0 || (st.st_flags & 0x40000000) != 0 {
+                            continue
+                        }
+                    }
                     return true
                 }
             }
@@ -497,6 +504,12 @@ public final class AppState: @unchecked Sendable {
         var total: Int64 = 0
         while let file = enumerator.nextObject() as? URL {
             if let isReg = (try? file.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile, isReg {
+                var st = stat()
+                if stat(file.path, &st) == 0 {
+                    if st.st_blocks == 0 || (st.st_flags & 0x40000000) != 0 {
+                        continue
+                    }
+                }
                 let size = Int64((try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)
                 total += size
             }

@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 APP_PATH="$PROJECT_ROOT/Yue2Studio.app"
-BUILD_NO="2026092501"
+BUILD_NO="2026092502"
 DMG_NAME="Yue2Studio-${BUILD_NO}.dmg"
 DMG_OUTPUT="$PROJECT_ROOT/$DMG_NAME"
 STAGING_DIR="/tmp/Yue2Studio_DMG_Staging"
